@@ -23,6 +23,7 @@ import {
   LogOut,
   UserCheck,
   CheckCircle2,
+  Bell,
 } from "lucide-react";
 
 interface NavItem {
@@ -79,6 +80,7 @@ export function Sidebar() {
     { label: "Exam Schedule", href: "/student/schedule", icon: CalendarClock },
     { label: "Exam History", href: "/student/history", icon: Clock },
     { label: "My Results", href: "/student/results", icon: Award },
+    { label: "Notifications", href: "/student/notifications", icon: Bell },
   ];
 
   let currentNav: NavItem[] = [];

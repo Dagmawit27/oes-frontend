@@ -4,7 +4,8 @@ import React from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Badge } from "@/lib/../components/ui/badge";
 import { Button } from "@/lib/../components/ui/button";
-import { LogOut, User as UserIcon, Bell } from "lucide-react";
+import { LogOut, User as UserIcon } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export function Topbar() {
   const { user, logout } = useAuth();
@@ -46,6 +47,9 @@ export function Topbar() {
         <Badge variant={getRoleBadgeVariant(user.roles)}>
           {formatRoleName(user.roles)}
         </Badge>
+
+        {/* Real-time Notification Bell */}
+        <NotificationBell />
 
         {/* User Pill */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-sm">
