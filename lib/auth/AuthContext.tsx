@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch {
             // Token might be valid or auto-refreshed by interceptor; keep stored user if active
-          }
+          } 
         }
       } catch (error) {
         console.error("Failed to initialize authentication", error);
