@@ -46,6 +46,7 @@ export function Sidebar() {
     { label: "Departments", href: "/admin/departments", icon: Building2 },
     { label: "Courses", href: "/admin/courses", icon: BookOpen },
     { label: "Enrollments", href: "/admin/enrollments", icon: UserCheck },
+    { label: "Institutional Results", href: "/admin/results", icon: Award },
     { label: "System Reports", href: "/admin/reports", icon: BarChart3 },
   ];
 
