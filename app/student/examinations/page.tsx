@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ import {
 import { toast } from "sonner";
 
 function StudentExaminationsContent() {
+  const router = useRouter();
   const [schedules, setSchedules] = useState<StudentSchedule[]>([]);
   const [notifications, setNotifications] = useState<ExamNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -368,9 +370,7 @@ function StudentExaminationsContent() {
 
                             <Button
                               onClick={() => {
-                                toast.success(
-                                  `Initiating Examination Session: "${exam.examinationTitle}". Entering test runner (Milestone 9).`
-                                );
+                                router.push(`/student/examinations/${exam.scheduleId}/take`);
                               }}
                               className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm gap-2 text-sm"
                             >
