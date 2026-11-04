@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { useSidebar } from "./SidebarContext";
 import { cn } from "@/lib/utils";
 import {
   GraduationCap,
@@ -21,9 +22,7 @@ import {
   CheckCircle2,
   Bell,
   ClipboardCheck,
-  FileQuestion,
   ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 
 interface NavItem {
@@ -35,31 +34,7 @@ interface NavItem {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  // Load persisted collapse state
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("oes_sidebar_collapsed");
-      if (saved !== null) {
-        setIsCollapsed(saved === "true");
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
-
-  const toggleCollapse = () => {
-    setIsCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("oes_sidebar_collapsed", String(next));
-      } catch {
-        // Ignore
-      }
-      return next;
-    });
-  };
+  const { isCollapsed, toggleCollapse } = useSidebar();
 
   if (!user) return null;
 
@@ -127,59 +102,47 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "relative bg-slate-900 text-slate-100 flex flex-col h-screen sticky top-0 border-r border-slate-800 select-none transition-all duration-300 ease-in-out shrink-0",
+        "relative bg-white text-slate-700 flex flex-col h-screen sticky top-0 border-r border-slate-200/90 shadow-xs select-none transition-all duration-300 ease-in-out shrink-0 z-30",
         isCollapsed ? "w-20" : "w-64"
       )}
     >
-      {/* Floating Edge Arrow Toggle Button */}
-      <button
-        onClick={toggleCollapse}
-        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute -right-3 top-7 z-40 w-6 h-6 rounded-full bg-white border border-slate-300 text-slate-700 hover:text-blue-600 hover:border-blue-500 shadow-md flex items-center justify-center transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        {isCollapsed ? (
-          <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
-        ) : (
-          <ChevronLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-        )}
-      </button>
-
       {/* Brand Header */}
       <div
         className={cn(
-          "h-16 flex items-center border-b border-slate-800 gap-3 transition-all",
+          "h-16 flex items-center border-b border-slate-100 bg-white gap-3 transition-all",
           isCollapsed ? "px-4 justify-center" : "px-5 justify-between"
         )}
       >
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20 shrink-0">
             <GraduationCap className="w-6 h-6" />
           </div>
           {!isCollapsed && (
             <div className="truncate animate-in fade-in duration-200">
-              <span className="font-bold text-base text-white tracking-tight leading-tight block">
+              <span className="font-bold text-base text-slate-900 tracking-tight leading-tight block">
                 College OES
               </span>
-              <span className="text-xs text-blue-400 font-medium">{roleTitle}</span>
+              <span className="text-xs text-sky-600 font-semibold">{roleTitle}</span>
             </div>
           )}
         </div>
 
-        {/* Header Collapse Toggle Icon (when expanded) */}
+        {/* Inner header toggle icon (when expanded) */}
         {!isCollapsed && (
           <button
+            type="button"
             onClick={toggleCollapse}
-            title="Collapse sidebar"
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            title="Collapse sidebar menu"
+            aria-label="Collapse sidebar menu"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors cursor-pointer"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4 stroke-[2.2]" />
           </button>
         )}
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 scrollbar-thin bg-white">
         {!isCollapsed && (
           <div className="px-3 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider animate-in fade-in duration-200">
             Navigation
@@ -200,14 +163,14 @@ export function Sidebar() {
                   ? "justify-center px-0 py-2.5"
                   : "gap-3 px-3 py-2.5",
                 isActive
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 font-semibold"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-sky-50 text-sky-700 font-semibold border-l-4 border-sky-600 shadow-xs"
+                  : "text-slate-600 hover:bg-sky-50/80 hover:text-sky-700"
               )}
             >
               <Icon
                 className={cn(
                   "w-4 h-4 shrink-0 transition-transform group-hover:scale-110",
-                  isActive ? "text-white" : "text-slate-400 group-hover:text-slate-200"
+                  isActive ? "text-sky-600" : "text-slate-400 group-hover:text-sky-600"
                 )}
               />
               {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -219,30 +182,31 @@ export function Sidebar() {
       {/* User Footer Profile */}
       <div
         className={cn(
-          "p-3 border-t border-slate-800 bg-slate-950/60 flex items-center gap-3 transition-all",
+          "p-3 border-t border-slate-100 bg-slate-50/60 flex items-center gap-3 transition-all",
           isCollapsed ? "flex-col justify-center" : "justify-between"
         )}
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-blue-900/60 border border-blue-500/40 text-blue-300 flex items-center justify-center text-xs font-bold shrink-0">
+          <div className="w-8 h-8 rounded-full bg-sky-100 border border-sky-200 text-sky-700 flex items-center justify-center text-xs font-bold shrink-0">
             {user.firstName?.charAt(0)}
             {user.lastName?.charAt(0)}
           </div>
           {!isCollapsed && (
             <div className="min-w-0 flex-1 truncate animate-in fade-in duration-200">
-              <div className="text-sm font-medium text-white truncate">
+              <div className="text-sm font-semibold text-slate-800 truncate">
                 {user.firstName} {user.lastName}
               </div>
-              <div className="text-[11px] text-slate-400 truncate">{user.email}</div>
+              <div className="text-[11px] text-slate-500 truncate">{user.email}</div>
             </div>
           )}
         </div>
 
         <button
+          type="button"
           onClick={() => logout()}
           title="Sign out"
           aria-label="Sign out"
-          className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
         >
           <LogOut className="w-4 h-4" />
         </button>
