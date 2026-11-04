@@ -57,7 +57,7 @@ export default function InstructorResultsPage() {
   const loadExaminations = async () => {
     setLoadingExams(true);
     try {
-      const res = await examApi.getExaminations({ size: 100 });
+      const res = await examApi.getExaminations({ myExamsOnly: true, size: 100 });
       if (res.success && res.data) {
         setExams(res.data.content);
         if (res.data.content.length > 0 && !selectedExamId) {

@@ -1,15 +1,36 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { resultApi, InstructorDashboardStats } from "@/lib/api/result";
 import { FileQuestion, FileSpreadsheet, CheckCircle2, BookOpen, ArrowRight, PlusCircle } from "lucide-react";
 
 export default function InstructorDashboardPage() {
   const { user } = useAuth();
+  const [stats, setStats] = useState<InstructorDashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const res = await resultApi.getInstructorDashboardStats();
+        if (res.success && res.data) {
+          setStats(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to load instructor dashboard stats", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   return (
     <DashboardShell allowedRoles={["ROLE_INSTRUCTOR"]}>
@@ -46,8 +67,12 @@ export default function InstructorDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-900">Assigned</div>
-              <p className="text-xs text-slate-500 mt-1">Active course offerings</p>
+              <div className="text-2xl font-bold text-slate-900">
+                {loading ? "..." : `${stats?.assignedCoursesCount ?? 0} Courses`}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {loading ? "Loading active offerings..." : `${stats?.totalEnrolledStudents ?? 0} Enrolled students`}
+              </p>
             </CardContent>
           </Card>
 
@@ -61,8 +86,12 @@ export default function InstructorDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-900">5 Types</div>
-              <p className="text-xs text-slate-500 mt-1">MCQ, T/F, Short Answer, Essay</p>
+              <div className="text-2xl font-bold text-slate-900">
+                {loading ? "..." : `${stats?.totalQuestionsCount ?? 0} Items`}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {loading ? "Loading questions..." : "Authored in question bank"}
+              </p>
             </CardContent>
           </Card>
 
@@ -76,8 +105,14 @@ export default function InstructorDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-900">Draft / Submitted</div>
-              <p className="text-xs text-slate-500 mt-1">Awaiting approval or live</p>
+              <div className="text-2xl font-bold text-slate-900">
+                {loading ? "..." : `${stats?.totalExamsCount ?? 0} Exams`}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {loading
+                  ? "Loading status..."
+                  : `${stats?.pendingReviewExamsCount ?? 0} Pending, ${stats?.approvedExamsCount ?? 0} Approved`}
+              </p>
             </CardContent>
           </Card>
 
@@ -91,8 +126,14 @@ export default function InstructorDashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-900">0 Items</div>
-              <p className="text-xs text-slate-500 mt-1">Subjective answer assessment</p>
+              <div className="text-2xl font-bold text-slate-900">
+                {loading ? "..." : `${stats?.pendingGradingSubmissionsCount ?? 0} Submissions`}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {loading
+                  ? "Loading assessments..."
+                  : `${stats?.completedGradingCount ?? 0} Tasks completed`}
+              </p>
             </CardContent>
           </Card>
         </div>

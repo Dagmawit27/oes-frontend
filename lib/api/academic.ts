@@ -134,6 +134,11 @@ export const academicApi = {
     return response.data;
   },
 
+  async getMyStudents(): Promise<ApiResponse<Enrollment[]>> {
+    const response = await apiClient.get<ApiResponse<Enrollment[]>>("/enrollments/my-students");
+    return response.data;
+  },
+
   async enrollStudent(studentId: number, courseOfferingId: number): Promise<ApiResponse<Enrollment>> {
     const response = await apiClient.post<ApiResponse<Enrollment>>("/enrollments", {
       studentId,

@@ -28,6 +28,7 @@ export interface QuestionFilterParams {
   difficulty?: DifficultyLevel;
   search?: string;
   isActive?: boolean;
+  myQuestionsOnly?: boolean;
   page?: number;
   size?: number;
 }

@@ -55,8 +55,10 @@ export default function ExaminationsListPage() {
           courseOfferingId: selectedOffering ? Number(selectedOffering) : undefined,
           status: selectedStatus !== "ALL" ? (selectedStatus as ExamStatus) : undefined,
           search: search || undefined,
+          myExamsOnly: true,
+          size: 100,
         }),
-        academicApi.getCourseOfferings(),
+        academicApi.getMyAssignedOfferings(),
       ]);
 
       if (examRes.success && examRes.data) {

@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { GraduationCap, Lock, Mail, Eye, EyeOff, AlertCircle, ShieldAlert } from "lucide-react";
+import { GraduationCap, Lock, Mail, Eye, EyeOff, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -59,27 +59,28 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      {/* Background Decorative Circles */}
-      <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-white flex flex-col justify-center items-center p-4 relative overflow-hidden">
+      {/* Subtle Background Decorative Blur */}
+      <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-50/50 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-amber-50/40 rounded-full blur-3xl pointer-events-none" />
 
       {/* Main Card Container */}
       <div className="w-full max-w-md z-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-500/25 mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/25 mb-4">
             <GraduationCap className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             College Examination Portal
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-slate-600 mt-1">
             Secure Full-Stack Online Examination System
           </p>
         </div>
 
-        <Card className="border-slate-800 bg-white/95 backdrop-blur-sm shadow-2xl">
+        {/* Login Container with Beige Border */}
+        <Card className="border-2 border-[#e6ded5] bg-white shadow-xl shadow-stone-200/40 rounded-2xl ring-0">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-xl font-bold text-slate-900 text-center">
               Sign In

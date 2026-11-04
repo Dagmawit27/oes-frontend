@@ -68,7 +68,7 @@ export default function CreateExaminationPage() {
     const fetchOfferings = async () => {
       try {
         setLoadingOfferings(true);
-        const res = await academicApi.getCourseOfferings();
+        const res = await academicApi.getMyAssignedOfferings();
         if (res.success && res.data) {
           setOfferings(res.data);
           if (res.data.length > 0) {

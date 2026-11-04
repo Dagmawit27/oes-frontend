@@ -8,7 +8,40 @@ import {
   ResultCorrectionRequest,
 } from "@/types/result";
 
+export interface InstructorDashboardStats {
+  assignedCoursesCount: number;
+  totalEnrolledStudents: number;
+  totalQuestionsCount: number;
+  totalExamsCount: number;
+  draftExamsCount: number;
+  pendingReviewExamsCount: number;
+  approvedExamsCount: number;
+  pendingGradingSubmissionsCount: number;
+  completedGradingCount: number;
+  recentExams: Array<{
+    id: number;
+    title: string;
+    courseOfferingCode?: string;
+    courseName?: string;
+    status: string;
+    durationMinutes: number;
+    totalMarks: number;
+    questionCount?: number;
+    createdAt?: string;
+  }>;
+}
+
 export const resultApi = {
+  /**
+   * Fetch live statistics and recent examinations for instructor dashboard.
+   */
+  async getInstructorDashboardStats(): Promise<ApiResponse<InstructorDashboardStats>> {
+    const response = await apiClient.get<ApiResponse<InstructorDashboardStats>>(
+      "/instructor/dashboard-stats"
+    );
+    return response.data;
+  },
+
   /**
    * Fetch logged-in student's course-based examination results.
    */

@@ -32,21 +32,12 @@ export function Topbar() {
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-10 shadow-xs">
       {/* Title / Breadcrumb Context */}
       <div className="flex items-center gap-3">
-        <h1 className="text-base font-semibold text-slate-800">
-          College Online Examination System
-        </h1>
-        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>System Online</span>
-        </div>
+        
       </div>
 
       {/* Right Controls */}
       <div className="flex items-center gap-4">
-        {/* Role Badge */}
-        <Badge variant={getRoleBadgeVariant(user.roles)}>
-          {formatRoleName(user.roles)}
-        </Badge>
+       
 
         {/* Real-time Notification Bell */}
         <NotificationBell />
