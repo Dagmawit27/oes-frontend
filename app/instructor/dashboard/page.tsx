@@ -46,10 +46,10 @@ export default function InstructorDashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/instructor/questions">
+            <Link href="/instructor/examinations/create">
               <Button className="shadow-md shadow-blue-500/20">
                 <PlusCircle className="w-4 h-4 mr-2" />
-                Add Questions
+                Create Examination
               </Button>
             </Link>
           </div>
@@ -143,16 +143,16 @@ export default function InstructorDashboardPage() {
           <Card className="hover:shadow-md transition-shadow">
             <CardHeader>
               <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <FileQuestion className="w-5 h-5 text-blue-600" />
-                Question Bank
+                <PlusCircle className="w-5 h-5 text-blue-600" />
+                New Examination
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-slate-600">
-                Author multiple-choice, true/false, short answer, and essay questions. Categorize by course offering and difficulty.
+                Author new examinations with questions, timing, attempts, and scoring rules created directly in the exam blueprint.
               </p>
-              <Link href="/instructor/questions" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
-                Manage questions <ArrowRight className="w-4 h-4 ml-1" />
+              <Link href="/instructor/examinations/create" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
+                Create examination <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </CardContent>
           </Card>

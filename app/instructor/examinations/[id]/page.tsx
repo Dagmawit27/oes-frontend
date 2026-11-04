@@ -326,11 +326,6 @@ function ExaminationDetailContent() {
                             <Badge className="text-[10px] bg-slate-200 text-slate-700 py-0 border-0">
                               {q.questionType?.replace("_", " ") || "QUESTION"}
                             </Badge>
-                            {q.difficultyLevel && (
-                              <Badge className="text-[10px] bg-emerald-100 text-emerald-800 py-0 border-0">
-                                {q.difficultyLevel}
-                              </Badge>
-                            )}
                           </div>
                           <p className="text-xs font-semibold text-slate-800 leading-snug">
                             {q.questionText}

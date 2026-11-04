@@ -154,12 +154,6 @@ export default function ExaminationsListPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/instructor/questions">
-              <Button variant="outline" className="gap-2">
-                <Layers className="h-4 w-4" />
-                Question Bank
-              </Button>
-            </Link>
             <Link href="/instructor/examinations/create">
               <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
                 <Plus className="h-4 w-4" />

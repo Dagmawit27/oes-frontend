@@ -1,4 +1,4 @@
-import { QuestionOption, QuestionType, DifficultyLevel } from "./question";
+import { QuestionOption, QuestionType } from "./question";
 
 export type ExamStatus =
   | "DRAFT"
@@ -66,7 +66,6 @@ export interface ExamQuestion {
   // Rich metadata
   questionText?: string;
   questionType?: QuestionType;
-  difficultyLevel?: DifficultyLevel;
   explanation?: string;
   options?: QuestionOption[];
   createdAt: string;

@@ -5,8 +5,6 @@ export type QuestionType =
   | "SHORT_ANSWER"
   | "ESSAY";
 
-export type DifficultyLevel = "EASY" | "MEDIUM" | "HARD";
-
 export interface QuestionOption {
   id?: number;
   optionText: string;
@@ -29,7 +27,6 @@ export interface Question {
   createdByName: string;
   questionText: string;
   questionType: QuestionType;
-  difficultyLevel: DifficultyLevel;
   defaultMarks: number;
   explanation?: string;
   version: number;
@@ -69,7 +66,6 @@ export interface CreateQuestionRequest {
   categoryId?: number;
   questionText: string;
   questionType: QuestionType;
-  difficultyLevel: DifficultyLevel;
   defaultMarks: number;
   explanation?: string;
   options: QuestionOption[];
@@ -80,7 +76,6 @@ export interface UpdateQuestionRequest {
   categoryId?: number;
   questionText: string;
   questionType: QuestionType;
-  difficultyLevel: DifficultyLevel;
   defaultMarks: number;
   explanation?: string;
   isActive?: boolean;

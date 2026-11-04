@@ -90,7 +90,6 @@ export function Sidebar() {
   const instructorNav: NavItem[] = [
     { label: "Dashboard", href: "/instructor/dashboard", icon: LayoutDashboard },
     { label: "My Courses", href: "/instructor/courses", icon: BookOpen },
-    { label: "Question Bank", href: "/instructor/questions", icon: FileQuestion },
     { label: "Examinations", href: "/instructor/examinations", icon: FileSpreadsheet },
     { label: "Submissions", href: "/instructor/submissions", icon: ClipboardCheck },
     { label: "Manual Grading", href: "/instructor/grading", icon: CheckCircle2 },

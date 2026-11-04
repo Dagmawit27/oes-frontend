@@ -8,7 +8,6 @@ import {
   UpdateQuestionRequest,
   StudentQuestion,
   QuestionType,
-  DifficultyLevel,
 } from "@/types/question";
 
 export interface PagedResponse<T> {
@@ -25,7 +24,6 @@ export interface QuestionFilterParams {
   bankId?: number;
   categoryId?: number;
   type?: QuestionType;
-  difficulty?: DifficultyLevel;
   search?: string;
   isActive?: boolean;
   myQuestionsOnly?: boolean;
