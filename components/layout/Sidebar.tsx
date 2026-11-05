@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   Bell,
   ClipboardCheck,
-  ChevronLeft,
 } from "lucide-react";
 
 interface NavItem {
@@ -110,7 +109,7 @@ export function Sidebar() {
       <div
         className={cn(
           "h-16 flex items-center border-b border-slate-100 bg-white gap-3 transition-all",
-          isCollapsed ? "px-4 justify-center" : "px-5 justify-between"
+          isCollapsed ? "px-4 justify-center" : "px-5"
         )}
       >
         <div className="flex items-center gap-3 overflow-hidden">
@@ -126,19 +125,6 @@ export function Sidebar() {
             </div>
           )}
         </div>
-
-        {/* Inner header toggle icon (when expanded) */}
-        {!isCollapsed && (
-          <button
-            type="button"
-            onClick={toggleCollapse}
-            title="Collapse sidebar menu"
-            aria-label="Collapse sidebar menu"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-colors cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4 stroke-[2.2]" />
-          </button>
-        )}
       </div>
 
       {/* Navigation Links */}
