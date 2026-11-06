@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { examApi } from "@/lib/api/exam";
 import { resultApi } from "@/lib/api/result";
 import { Examination } from "@/types/exam";
-import { CourseExamRosterItem } from "@/types/result";
+import { CourseExamRosterItem, isGradingCompleted, isResultPublished } from "@/types/result";
 import {
   Award,
   BookOpen,
@@ -31,11 +32,15 @@ import {
   UserCheck,
   Users,
   X,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
-export default function InstructorResultsPage() {
+function InstructorResultsContent() {
+  const searchParams = useSearchParams();
+  const urlExamId = searchParams.get("examId");
+
   const [exams, setExams] = useState<Examination[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
   const [roster, setRoster] = useState<CourseExamRosterItem[]>([]);
@@ -59,9 +64,12 @@ export default function InstructorResultsPage() {
     try {
       const res = await examApi.getExaminations({ myExamsOnly: true, size: 100 });
       if (res.success && res.data) {
-        setExams(res.data.content);
-        if (res.data.content.length > 0 && !selectedExamId) {
-          setSelectedExamId(res.data.content[0].id);
+        // Sort latest exams first
+        const sorted = [...res.data.content].sort((a, b) => b.id - a.id);
+        setExams(sorted);
+        if (sorted.length > 0) {
+          const targetId = urlExamId ? Number(urlExamId) : (selectedExamId || sorted[0].id);
+          setSelectedExamId(targetId);
         }
       }
     } catch (err: any) {
@@ -70,6 +78,12 @@ export default function InstructorResultsPage() {
       setLoadingExams(false);
     }
   };
+
+  useEffect(() => {
+    if (urlExamId) {
+      setSelectedExamId(Number(urlExamId));
+    }
+  }, [urlExamId]);
 
   useEffect(() => {
     if (selectedExamId) {
@@ -121,12 +135,12 @@ export default function InstructorResultsPage() {
     }
 
     if (correctingItem.totalMarks && parsedMarks > correctingItem.totalMarks) {
-      toast.error(`Marks cannot exceed total available examination marks (${correctingItem.totalMarks}).`);
+      toast.error(`Marks cannot exceed total available marks (${correctingItem.totalMarks}).`);
       return;
     }
 
     if (!correctionReason.trim()) {
-      toast.error("Please provide a justification reason for the audit log.");
+      toast.error("Please provide an audit justification reason.");
       return;
     }
 
@@ -137,7 +151,7 @@ export default function InstructorResultsPage() {
         reason: correctionReason.trim(),
       });
       if (res.success) {
-        toast.success("Result corrected and audit record saved successfully.");
+        toast.success("Result corrected and audit record recorded successfully.");
         setCorrectingItem(null);
         if (selectedExamId) loadRoster(selectedExamId);
       }
@@ -156,44 +170,60 @@ export default function InstructorResultsPage() {
 
     if (!matchesSearch) return false;
 
-    if (statusFilter === "SUBMITTED") return item.attemptStatus === "SUBMITTED";
-    if (statusFilter === "IN_PROGRESS") return item.attemptStatus === "IN_PROGRESS";
-    if (statusFilter === "NOT_ATTEMPTED") return item.attemptStatus === "NOT_ATTEMPTED" || !item.attemptStatus;
-    if (statusFilter === "PENDING_GRADING") return item.gradingStatus === "PENDING" || item.gradingStatus === "IN_PROGRESS";
-    if (statusFilter === "COMPLETED") return item.gradingStatus === "COMPLETED";
+    if (statusFilter === "SUBMITTED") return item.attemptStatus === "Submitted" || item.attemptStatus === "SUBMITTED";
+    if (statusFilter === "IN_PROGRESS") return item.attemptStatus === "In Progress" || item.attemptStatus === "IN_PROGRESS";
+    if (statusFilter === "NOT_ATTEMPTED") return item.attemptStatus === "Not Attempted" || item.attemptStatus === "NOT_ATTEMPTED" || !item.attemptStatus;
+    if (statusFilter === "PENDING_GRADING") return !isGradingCompleted(item.gradingStatus) && (item.attemptStatus !== "Not Attempted" && item.attemptStatus !== "NOT_ATTEMPTED");
+    if (statusFilter === "COMPLETED") return isGradingCompleted(item.gradingStatus);
 
     return true;
   });
 
-  // Calculate statistics (Marks-based, strictly NO pass/fail)
+  // Calculate statistics
   const totalEnrolled = roster.length;
-  const attemptedCount = roster.filter((r) => r.attemptStatus && r.attemptStatus !== "NOT_ATTEMPTED").length;
-  const submittedCount = roster.filter((r) => r.attemptStatus === "SUBMITTED").length;
-  const gradedCount = roster.filter((r) => r.gradingStatus === "COMPLETED").length;
-  const publishedCount = roster.filter((r) => r.publicationStatus === "PUBLISHED").length;
+  const attemptedCount = roster.filter((r) => r.attemptStatus && r.attemptStatus !== "Not Attempted" && r.attemptStatus !== "NOT_ATTEMPTED").length;
+  const submittedCount = roster.filter((r) => r.attemptStatus === "Submitted" || r.attemptStatus === "SUBMITTED").length;
+  const gradedCount = roster.filter((r) => isGradingCompleted(r.gradingStatus)).length;
+  const publishedCount = roster.filter((r) => isResultPublished(r.publicationStatus)).length;
 
   return (
     <ProtectedRoute allowedRoles={["ROLE_INSTRUCTOR", "ROLE_ADMIN"]}>
       <DashboardShell>
         <div className="space-y-6 max-w-7xl mx-auto pb-12">
           {/* Top Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white border border-slate-200/90 p-6 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-                <FileCheck2 className="h-8 w-8 text-primary" />
-                Course Examination Results & Grading
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                  <Award className="w-3.5 h-3.5 text-sky-600" />
+                  Academic Assessment
+                </span>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
+                Course Examination Results & Roster
               </h1>
-              <p className="text-slate-500 mt-1">
-                Evaluate student submissions, score subjective responses, manage draft grades, and audit published marks.
+              <p className="text-sm text-slate-500 mt-0.5">
+                Evaluate student submissions, score subjective responses, manage draft grades, and audit student marks.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <Button
                 variant="outline"
+                size="sm"
+                onClick={() => selectedExamId && loadRoster(selectedExamId)}
+                disabled={loadingRoster || !selectedExamId}
+                className="border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5 text-xs h-9"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingRoster ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleExportCsv}
                 disabled={!selectedExamId || roster.length === 0}
-                className="gap-2 border-slate-200"
+                className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9"
               >
                 <Download className="h-4 w-4" />
                 Export CSV
@@ -202,20 +232,22 @@ export default function InstructorResultsPage() {
           </div>
 
           {/* Exam Selector Strip */}
-          <Card className="border-slate-200 shadow-xs">
-            <CardContent className="pt-6">
+          <Card className="bg-white border-slate-200/90 shadow-xs">
+            <CardContent className="p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1">
-                  <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center border border-sky-200/60 shrink-0">
+                    <FileSpreadsheet className="h-5 w-5" />
+                  </div>
                   <div className="flex-1 max-w-md">
                     <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-                      Active Examination
+                      Target Examination
                     </label>
                     <select
                       value={selectedExamId || ""}
                       onChange={(e) => setSelectedExamId(Number(e.target.value))}
                       disabled={loadingExams || exams.length === 0}
-                      className="w-full text-sm font-medium rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary shadow-xs"
+                      className="w-full text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                     >
                       {exams.length === 0 ? (
                         <option value="">No examinations found</option>
@@ -231,18 +263,18 @@ export default function InstructorResultsPage() {
                 </div>
 
                 {selectedExam && (
-                  <div className="flex items-center gap-6 text-sm text-slate-600 bg-slate-50 px-4 py-2.5 rounded-lg border border-slate-200/60">
+                  <div className="flex items-center gap-6 text-xs text-slate-600 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200/60">
                     <div>
-                      <span className="text-slate-400 text-xs block">Duration</span>
-                      <span className="font-semibold">{selectedExam.durationMinutes} mins</span>
+                      <span className="text-slate-400 text-[10px] block uppercase font-medium">Duration</span>
+                      <span className="font-semibold text-slate-800">{selectedExam.durationMinutes} mins</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 text-xs block">Total Marks</span>
-                      <span className="font-semibold font-mono">{Number(selectedExam.totalMarks).toFixed(2)}</span>
+                      <span className="text-slate-400 text-[10px] block uppercase font-medium">Total Marks</span>
+                      <span className="font-bold font-mono text-sky-700">{Number(selectedExam.totalMarks).toFixed(2)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 text-xs block">Questions</span>
-                      <span className="font-semibold">{selectedExam.questions?.length || 0}</span>
+                      <span className="text-slate-400 text-[10px] block uppercase font-medium">Questions</span>
+                      <span className="font-semibold text-slate-800">{selectedExam.questionCount || selectedExam.questions?.length || 0}</span>
                     </div>
                   </div>
                 )}
@@ -252,41 +284,46 @@ export default function InstructorResultsPage() {
 
           {/* Roster Metrics Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Enrolled</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{totalEnrolled}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Course candidates</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Submissions</p>
-                <p className="text-2xl font-bold text-blue-600 mt-1">
+                <p className="text-2xl font-bold text-sky-700 mt-1">
                   {submittedCount}{" "}
-                  <span className="text-xs font-normal text-slate-400">/ {attemptedCount} attempted</span>
+                  <span className="text-xs font-normal text-slate-400">/ {attemptedCount}</span>
                 </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Attempted sittings</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Grading Completed</p>
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Graded</p>
                 <p className="text-2xl font-bold text-emerald-600 mt-1">{gradedCount}</p>
+                <p className="text-[11px] text-emerald-600 font-medium mt-0.5">Evaluation finalized</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Published</p>
-                <p className="text-2xl font-bold text-primary mt-1">{publishedCount}</p>
+                <p className="text-2xl font-bold text-blue-700 mt-1">{publishedCount}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Live for candidates</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Not Attempted</p>
                 <p className="text-2xl font-bold text-slate-500 mt-1">{totalEnrolled - attemptedCount}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Absent students</p>
               </CardContent>
             </Card>
           </div>
@@ -300,7 +337,7 @@ export default function InstructorResultsPage() {
                 placeholder="Search candidates by name or reg number..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-white border-slate-200 shadow-xs"
+                className="pl-9 bg-white border-slate-200 shadow-xs text-xs h-9"
               />
             </div>
 
@@ -309,7 +346,7 @@ export default function InstructorResultsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="text-sm font-medium rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary shadow-xs"
+                className="text-xs font-medium rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 shadow-xs h-9"
               >
                 <option value="ALL">All Candidates</option>
                 <option value="SUBMITTED">Submitted</option>
@@ -322,80 +359,87 @@ export default function InstructorResultsPage() {
           </div>
 
           {/* Candidate Results Roster Table */}
-          <Card className="border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="bg-slate-50/60 border-b border-slate-100 py-4 px-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold text-slate-900">Enrolled Student Roster</CardTitle>
-                  <CardDescription className="text-xs">
-                    Showing {filteredRoster.length} of {roster.length} registered candidates
-                  </CardDescription>
-                </div>
+          <Card className="bg-white border-slate-200/90 shadow-xs overflow-hidden">
+            <CardHeader className="bg-slate-50/60 border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold text-slate-900">Enrolled Student Roster</CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Showing {filteredRoster.length} of {roster.length} registered candidates
+                </CardDescription>
               </div>
             </CardHeader>
 
             <CardContent className="p-0">
               {loadingRoster ? (
                 <div className="flex flex-col items-center justify-center py-16 space-y-3">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                  <p className="text-sm text-slate-500">Loading candidate roster...</p>
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
+                  <p className="text-xs text-slate-500">Loading candidate roster...</p>
                 </div>
               ) : filteredRoster.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 text-sm">
+                <div className="py-12 text-center text-slate-500 text-xs">
                   No candidate records match the selected criteria.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-sm">
+                  <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/40 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        <th className="py-3 px-6">Reg Number</th>
-                        <th className="py-3 px-6">Student Name</th>
-                        <th className="py-3 px-6">Attempt Status</th>
-                        <th className="py-3 px-6">Grading Status</th>
-                        <th className="py-3 px-6">Marks Earned</th>
-                        <th className="py-3 px-6">Publication</th>
-                        <th className="py-3 px-6 text-right">Actions</th>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        <th className="py-3 px-4">Reg Number</th>
+                        <th className="py-3 px-4">Student Name</th>
+                        <th className="py-3 px-4">Attempt Status</th>
+                        <th className="py-3 px-4">Grading Status</th>
+                        <th className="py-3 px-4">Marks Earned</th>
+                        <th className="py-3 px-4">Publication</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredRoster.map((item) => {
-                        const isAttempted = item.attemptStatus && item.attemptStatus !== "NOT_ATTEMPTED";
-                        const isSubmitted = item.attemptStatus === "SUBMITTED";
-                        const isGraded = item.gradingStatus === "COMPLETED";
-                        const isPublished = item.publicationStatus === "PUBLISHED";
+                        const isAttempted = item.attemptStatus && item.attemptStatus !== "Not Attempted" && item.attemptStatus !== "NOT_ATTEMPTED";
+                        const isGraded = isGradingCompleted(item.gradingStatus);
+                        const isPublished = isResultPublished(item.publicationStatus);
 
                         return (
-                          <tr key={item.studentId} className="hover:bg-slate-50/60 transition">
-                            <td className="py-4 px-6 font-mono text-xs font-medium text-slate-700">
+                          <tr key={item.studentId} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3.5 px-4 font-mono font-semibold text-sky-700">
                               {item.registrationNumber}
                             </td>
-                            <td className="py-4 px-6 font-semibold text-slate-900">
+                            <td className="py-3.5 px-4 font-medium text-slate-900">
                               {item.studentName}
                             </td>
-                            <td className="py-4 px-6">
-                              {item.attemptStatus === "SUBMITTED" ? (
-                                <Badge className="bg-blue-50 text-blue-700 border-blue-200">Submitted</Badge>
-                              ) : item.attemptStatus === "IN_PROGRESS" ? (
-                                <Badge className="bg-amber-50 text-amber-700 border-amber-200">In Progress</Badge>
-                              ) : item.attemptStatus === "EXPIRED" ? (
-                                <Badge className="bg-rose-50 text-rose-700 border-rose-200">Expired</Badge>
+                            <td className="py-3.5 px-4">
+                              {item.attemptStatus === "Submitted" || item.attemptStatus === "SUBMITTED" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                                  Submitted
+                                </span>
+                              ) : item.attemptStatus === "In Progress" || item.attemptStatus === "IN_PROGRESS" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  In Progress
+                                </span>
+                              ) : item.attemptStatus === "Expired" || item.attemptStatus === "EXPIRED" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                  Expired
+                                </span>
                               ) : (
-                                <Badge className="bg-slate-100 text-slate-500 border-slate-200">Not Attempted</Badge>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500">
+                                  Not Attempted
+                                </span>
                               )}
                             </td>
-                            <td className="py-4 px-6">
+                            <td className="py-3.5 px-4">
                               {isGraded ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Completed</Badge>
-                              ) : item.gradingStatus === "IN_PROGRESS" ? (
-                                <Badge className="bg-purple-50 text-purple-700 border-purple-200">Draft In Progress</Badge>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3" /> Graded
+                                </span>
                               ) : isAttempted ? (
-                                <Badge className="bg-amber-50 text-amber-700 border-amber-200">Pending Review</Badge>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  <Clock className="w-3 h-3" /> Pending Review
+                                </span>
                               ) : (
                                 <span className="text-slate-400 text-xs">—</span>
                               )}
                             </td>
-                            <td className="py-4 px-6 font-mono font-medium">
+                            <td className="py-3.5 px-4 font-mono font-medium">
                               {item.earnedMarks !== null ? (
                                 <span className="text-slate-900 font-bold">
                                   {Number(item.earnedMarks).toFixed(2)}{" "}
@@ -409,18 +453,22 @@ export default function InstructorResultsPage() {
                                 <span className="text-slate-400 text-xs">Not Attempted</span>
                               )}
                             </td>
-                            <td className="py-4 px-6">
+                            <td className="py-3.5 px-4">
                               {isPublished ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Published</Badge>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Published
+                                </span>
                               ) : (
-                                <Badge className="bg-slate-100 text-slate-600 border-slate-200">Draft</Badge>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                  Draft (Officer Release)
+                                </span>
                               )}
                             </td>
-                            <td className="py-4 px-6 text-right space-x-2">
+                            <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
                               {item.attemptId && (
                                 <Link href={`/instructor/grading/${item.attemptId}`}>
-                                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs font-medium">
-                                    <PenTool className="h-3.5 w-3.5 text-primary" />
+                                  <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white gap-1.5 h-8 text-xs font-medium shadow-xs">
+                                    <PenTool className="h-3.5 w-3.5" />
                                     {isGraded ? "Review Grades" : "Grade Attempt"}
                                   </Button>
                                 </Link>
@@ -429,11 +477,11 @@ export default function InstructorResultsPage() {
                               {isPublished && item.resultId && (
                                 <Button
                                   size="sm"
-                                  variant="ghost"
+                                  variant="outline"
                                   onClick={() => openCorrectionModal(item)}
-                                  className="h-8 text-xs text-slate-600 hover:text-slate-900 gap-1"
+                                  className="h-8 text-xs text-slate-600 hover:text-slate-900 gap-1 border-slate-200"
                                 >
-                                  <Edit3 className="h-3.5 w-3.5" />
+                                  <Edit3 className="h-3.5 w-3.5 text-sky-600" />
                                   Correct
                                 </Button>
                               )}
@@ -448,24 +496,24 @@ export default function InstructorResultsPage() {
             </CardContent>
           </Card>
 
-          {/* Result Correction Audit Modal */}
+          {/* Audit Correction Modal */}
           {correctingItem && (
-            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-              <Card className="w-full max-w-md bg-white border-slate-200 shadow-xl">
-                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <Card className="w-full max-w-md bg-white border-slate-200 shadow-xl rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 bg-slate-50/50">
                   <div>
-                    <CardTitle className="text-lg font-bold text-slate-900">
-                      Correct Published Result
+                    <CardTitle className="text-base font-bold text-slate-900">
+                      Audit Correction (Published Mark)
                     </CardTitle>
-                    <CardDescription className="text-xs">
-                      All adjustments are permanently audited with reason and timestamp.
+                    <CardDescription className="text-xs text-slate-500">
+                      Modifications to published scores require audit logging.
                     </CardDescription>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setCorrectingItem(null)}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -480,7 +528,7 @@ export default function InstructorResultsPage() {
                       </p>
                       <p>
                         <span className="font-semibold text-slate-700">Current Earned Marks: </span>
-                        <span className="font-mono font-bold text-primary">
+                        <span className="font-mono font-bold text-sky-700">
                           {correctingItem.earnedMarks !== null ? Number(correctingItem.earnedMarks).toFixed(2) : "0.00"}
                         </span>{" "}
                         / {correctingItem.totalMarks ? Number(correctingItem.totalMarks).toFixed(2) : "—"}
@@ -499,8 +547,8 @@ export default function InstructorResultsPage() {
                         required
                         value={newEarnedMarks}
                         onChange={(e) => setNewEarnedMarks(e.target.value)}
-                        placeholder="e.g. 24.50"
-                        className="font-mono text-sm"
+                        placeholder="e.g. 18.50"
+                        className="font-mono text-xs bg-slate-50 border-slate-200"
                       />
                     </div>
 
@@ -513,8 +561,8 @@ export default function InstructorResultsPage() {
                         rows={3}
                         value={correctionReason}
                         onChange={(e) => setCorrectionReason(e.target.value)}
-                        placeholder="Explain why this mark is being adjusted (e.g., student inquiry, manual re-evaluation)..."
-                        className="w-full text-xs rounded-lg border border-slate-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Explain why this student's grade is being altered..."
+                        className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 p-2.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-slate-900"
                       />
                     </div>
                   </CardContent>
@@ -526,6 +574,7 @@ export default function InstructorResultsPage() {
                       size="sm"
                       onClick={() => setCorrectingItem(null)}
                       disabled={submittingCorrection}
+                      className="text-xs"
                     >
                       Cancel
                     </Button>
@@ -533,8 +582,9 @@ export default function InstructorResultsPage() {
                       type="submit"
                       size="sm"
                       disabled={submittingCorrection}
+                      className="bg-sky-600 hover:bg-sky-700 text-white text-xs shadow-xs"
                     >
-                      {submittingCorrection ? "Saving Audit..." : "Save Correction"}
+                      {submittingCorrection ? "Auditing..." : "Save Correction"}
                     </Button>
                   </div>
                 </form>
@@ -544,5 +594,22 @@ export default function InstructorResultsPage() {
         </div>
       </DashboardShell>
     </ProtectedRoute>
+  );
+}
+
+export default function InstructorResultsPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardShell>
+          <div className="py-24 text-center text-slate-400">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
+            <p className="text-sm">Loading course results...</p>
+          </div>
+        </DashboardShell>
+      }
+    >
+      <InstructorResultsContent />
+    </Suspense>
   );
 }

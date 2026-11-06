@@ -91,11 +91,16 @@ export default function ExamOfficerApprovalsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-              <ClipboardCheck className="h-7 w-7 text-indigo-600" />
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                <ClipboardCheck className="w-3.5 h-3.5 text-sky-600" />
+                Examination Governance
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
               Examination Approvals Queue
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 mt-0.5">
               Audit submitted examinations, inspect question distributions, verify marks, and grant scheduling approvals.
             </p>
           </div>
@@ -109,7 +114,7 @@ export default function ExamOfficerApprovalsPage() {
               onClick={() => setSelectedStatus(tab)}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
                 selectedStatus === tab
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-sky-600 text-white shadow-sm"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
@@ -141,7 +146,7 @@ export default function ExamOfficerApprovalsPage() {
                 <select
                   value={selectedOffering}
                   onChange={(e) => setSelectedOffering(e.target.value)}
-                  className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
                 >
                   <option value="">All Course Offerings</option>
                   {offerings.map((co) => (
@@ -191,7 +196,7 @@ export default function ExamOfficerApprovalsPage() {
           <CardContent className="p-0">
             {loading ? (
               <div className="py-16 text-center text-slate-400">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
                 <p className="text-sm">Loading examination queue...</p>
               </div>
             ) : examinations.length === 0 ? (
@@ -223,7 +228,7 @@ export default function ExamOfficerApprovalsPage() {
                         <td className="py-3.5 px-4 max-w-xs">
                           <Link
                             href={`/exam-officer/approvals/${exam.id}`}
-                            className="font-semibold text-indigo-700 hover:text-indigo-900 line-clamp-1 text-sm"
+                            className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-1 text-sm"
                           >
                             {exam.title}
                           </Link>
@@ -270,7 +275,7 @@ export default function ExamOfficerApprovalsPage() {
                             {exam.status === "SUBMITTED" ? (
                               <Button
                                 size="sm"
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5 font-medium"
+                                className="bg-sky-600 hover:bg-sky-700 text-white text-xs gap-1.5 font-medium shadow-xs"
                               >
                                 Review Exam
                                 <ArrowRight className="h-3.5 w-3.5" />

@@ -71,7 +71,7 @@ export default function ExamOfficerEligibilityOverviewPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
                 Candidate Management
               </span>
             </div>
@@ -132,7 +132,7 @@ export default function ExamOfficerEligibilityOverviewPage() {
           <Card className="border border-slate-200 shadow-xs">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-purple-50 text-purple-600">
+                <div className="p-2.5 rounded-xl bg-sky-50 text-sky-600">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>

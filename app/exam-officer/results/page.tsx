@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { examApi } from "@/lib/api/exam";
 import { resultApi } from "@/lib/api/result";
 import { Examination } from "@/types/exam";
-import { CourseExamRosterItem } from "@/types/result";
+import { CourseExamRosterItem, isGradingCompleted, isResultPublished, isResultDraft } from "@/types/result";
 import {
   Award,
   BookOpen,
@@ -32,10 +33,14 @@ import {
   UserCheck,
   Users,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function ExamOfficerResultsPage() {
+function ExamOfficerResultsContent() {
+  const searchParams = useSearchParams();
+  const urlExamId = searchParams.get("examId");
+
   const [exams, setExams] = useState<Examination[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
   const [roster, setRoster] = useState<CourseExamRosterItem[]>([]);
@@ -60,9 +65,11 @@ export default function ExamOfficerResultsPage() {
     try {
       const res = await examApi.getExaminations({ size: 100 });
       if (res.success && res.data) {
-        setExams(res.data.content);
-        if (res.data.content.length > 0 && !selectedExamId) {
-          setSelectedExamId(res.data.content[0].id);
+        const examList = [...res.data.content].sort((a, b) => b.id - a.id);
+        setExams(examList);
+        if (examList.length > 0) {
+          const targetId = urlExamId ? Number(urlExamId) : (selectedExamId || examList[0].id);
+          setSelectedExamId(targetId);
         }
       }
     } catch (err: any) {
@@ -71,6 +78,12 @@ export default function ExamOfficerResultsPage() {
       setLoadingExams(false);
     }
   };
+
+  useEffect(() => {
+    if (urlExamId) {
+      setSelectedExamId(Number(urlExamId));
+    }
+  }, [urlExamId]);
 
   useEffect(() => {
     if (selectedExamId) {
@@ -112,7 +125,7 @@ export default function ExamOfficerResultsPage() {
   const handlePublishAll = async () => {
     if (!selectedExamId) return;
     const completedUnpublished = roster.filter(
-      (r) => r.gradingStatus === "COMPLETED" && r.publicationStatus === "DRAFT"
+      (r) => isGradingCompleted(r.gradingStatus) && !isResultPublished(r.publicationStatus)
     ).length;
 
     if (completedUnpublished === 0) {
@@ -206,11 +219,13 @@ export default function ExamOfficerResultsPage() {
 
   // Statistics
   const totalEnrolled = roster.length;
-  const attemptedCount = roster.filter((r) => r.attemptStatus && r.attemptStatus !== "NOT_ATTEMPTED").length;
-  const gradedCompleted = roster.filter((r) => r.gradingStatus === "COMPLETED").length;
-  const publishedCount = roster.filter((r) => r.publicationStatus === "PUBLISHED").length;
+  const attemptedCount = roster.filter(
+    (r) => r.attemptStatus && r.attemptStatus.toUpperCase() !== "NOT_ATTEMPTED" && r.attemptStatus.toUpperCase() !== "NOT ATTEMPTED"
+  ).length;
+  const gradedCompleted = roster.filter((r) => isGradingCompleted(r.gradingStatus)).length;
+  const publishedCount = roster.filter((r) => isResultPublished(r.publicationStatus)).length;
   const readyToPublishCount = roster.filter(
-    (r) => r.gradingStatus === "COMPLETED" && r.publicationStatus === "DRAFT"
+    (r) => isGradingCompleted(r.gradingStatus) && !isResultPublished(r.publicationStatus)
   ).length;
 
   return (
@@ -218,23 +233,29 @@ export default function ExamOfficerResultsPage() {
       <DashboardShell>
         <div className="space-y-6 max-w-7xl mx-auto pb-12">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white border border-slate-200/90 p-6 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-                <ShieldCheck className="h-8 w-8 text-primary" />
-                Examination Result Publication & Auditing
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
+                  Official Examination Governance
+                </span>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
+                Result Publication & Candidate Auditing
               </h1>
-              <p className="text-slate-500 mt-1">
+              <p className="text-sm text-slate-500 mt-0.5">
                 Official Exam Officer portal for reviewing evaluated examination batches, authorizing candidate publication, and maintaining score audit trails.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={handleExportCsv}
                 disabled={!selectedExamId || roster.length === 0}
-                className="gap-2 border-slate-200"
+                className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9"
               >
                 <Download className="h-4 w-4" />
                 Export CSV
@@ -243,7 +264,7 @@ export default function ExamOfficerResultsPage() {
               <Button
                 onClick={handlePublishAll}
                 disabled={publishingAll || readyToPublishCount === 0}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 shadow-xs"
               >
                 <Send className="h-4 w-4" />
                 {publishingAll ? "Publishing..." : `Publish All (${readyToPublishCount} Ready)`}
@@ -252,20 +273,22 @@ export default function ExamOfficerResultsPage() {
           </div>
 
           {/* Exam Selector */}
-          <Card className="border-slate-200 shadow-xs">
-            <CardContent className="pt-6">
+          <Card className="bg-white border-slate-200/90 shadow-xs">
+            <CardContent className="p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1">
-                  <FileSpreadsheet className="h-5 w-5 text-primary shrink-0" />
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center border border-sky-200/60 shrink-0">
+                    <FileSpreadsheet className="h-5 w-5" />
+                  </div>
                   <div className="flex-1 max-w-md">
                     <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-1">
-                      Target Examination
+                      Target Examination Blueprint
                     </label>
                     <select
                       value={selectedExamId || ""}
                       onChange={(e) => setSelectedExamId(Number(e.target.value))}
                       disabled={loadingExams || exams.length === 0}
-                      className="w-full text-sm font-medium rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary shadow-xs"
+                      className="w-full text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                     >
                       {exams.length === 0 ? (
                         <option value="">No examinations found</option>
@@ -281,14 +304,14 @@ export default function ExamOfficerResultsPage() {
                 </div>
 
                 {selectedExam && (
-                  <div className="flex items-center gap-6 text-sm text-slate-600 bg-slate-50 px-4 py-2.5 rounded-lg border border-slate-200/60">
+                  <div className="flex items-center gap-6 text-xs text-slate-600 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200/60">
                     <div>
-                      <span className="text-slate-400 text-xs block">Course</span>
-                      <span className="font-semibold">{selectedExam.courseName || "General"}</span>
+                      <span className="text-slate-400 text-[10px] block uppercase font-medium">Course Offering</span>
+                      <span className="font-semibold text-slate-800">{selectedExam.courseName || "General"}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 text-xs block">Total Marks</span>
-                      <span className="font-semibold font-mono">{Number(selectedExam.totalMarks).toFixed(2)}</span>
+                      <span className="text-slate-400 text-[10px] block uppercase font-medium">Total Exam Marks</span>
+                      <span className="font-bold font-mono text-sky-700">{Number(selectedExam.totalMarks).toFixed(2)}</span>
                     </div>
                   </div>
                 )}
@@ -298,38 +321,43 @@ export default function ExamOfficerResultsPage() {
 
           {/* Metrics Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Enrolled</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{totalEnrolled}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Candidates in roster</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Attempted</p>
-                <p className="text-2xl font-bold text-blue-600 mt-1">{attemptedCount}</p>
+                <p className="text-2xl font-bold text-sky-700 mt-1">{attemptedCount}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Candidate submissions</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Evaluation Completed</p>
-                <p className="text-2xl font-bold text-purple-600 mt-1">{gradedCompleted}</p>
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Evaluation Done</p>
+                <p className="text-2xl font-bold text-blue-700 mt-1">{gradedCompleted}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Graded attempts</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Ready to Publish</p>
                 <p className="text-2xl font-bold text-amber-600 mt-1">{readyToPublishCount}</p>
+                <p className="text-[11px] text-amber-600 font-medium mt-0.5">Awaiting authorization</p>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-xs">
-              <CardContent className="pt-5 pb-5">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Published to Students</p>
+            <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardContent className="p-4">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Published</p>
                 <p className="text-2xl font-bold text-emerald-600 mt-1">{publishedCount}</p>
+                <p className="text-[11px] text-emerald-600 font-medium mt-0.5">Live for students</p>
               </CardContent>
             </Card>
           </div>
@@ -342,75 +370,90 @@ export default function ExamOfficerResultsPage() {
               placeholder="Search candidate name or reg number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-white border-slate-200 shadow-xs"
+              className="pl-9 bg-white border-slate-200 shadow-xs text-xs h-9"
             />
           </div>
 
           {/* Roster Table */}
-          <Card className="border-slate-200 shadow-xs overflow-hidden">
-            <CardHeader className="bg-slate-50/60 border-b border-slate-100 py-4 px-6">
-              <CardTitle className="text-base font-bold text-slate-900">
-                Official Examination Publication Roster
-              </CardTitle>
+          <Card className="bg-white border-slate-200/90 shadow-xs overflow-hidden">
+            <CardHeader className="bg-slate-50/60 border-b border-slate-100 py-4 px-6 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold text-slate-900">
+                  Official Examination Publication Roster
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Audit candidate scoring and toggle publication authorization
+                </CardDescription>
+              </div>
             </CardHeader>
 
             <CardContent className="p-0">
               {loadingRoster ? (
                 <div className="flex flex-col items-center justify-center py-16 space-y-3">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                  <p className="text-sm text-slate-500">Loading candidate publication records...</p>
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
+                  <p className="text-xs text-slate-500">Loading candidate publication records...</p>
                 </div>
               ) : filteredRoster.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 text-sm">
+                <div className="py-12 text-center text-slate-500 text-xs">
                   No candidates found for this examination.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-sm">
+                  <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/40 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        <th className="py-3 px-6">Reg Number</th>
-                        <th className="py-3 px-6">Candidate Name</th>
-                        <th className="py-3 px-6">Attempt Status</th>
-                        <th className="py-3 px-6">Grading Status</th>
-                        <th className="py-3 px-6">Earned Marks</th>
-                        <th className="py-3 px-6">Publication Status</th>
-                        <th className="py-3 px-6 text-right">Officer Authorization</th>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        <th className="py-3 px-4">Reg Number</th>
+                        <th className="py-3 px-4">Candidate Name</th>
+                        <th className="py-3 px-4">Attempt Status</th>
+                        <th className="py-3 px-4">Grading Status</th>
+                        <th className="py-3 px-4">Earned Marks</th>
+                        <th className="py-3 px-4">Publication Status</th>
+                        <th className="py-3 px-4 text-right">Officer Authorization</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredRoster.map((item) => {
-                        const isGraded = item.gradingStatus === "COMPLETED";
-                        const isPublished = item.publicationStatus === "PUBLISHED";
+                        const isGraded = isGradingCompleted(item.gradingStatus);
+                        const isPublished = isResultPublished(item.publicationStatus);
                         const isReadyToPublish = isGraded && !isPublished;
 
                         return (
-                          <tr key={item.studentId} className="hover:bg-slate-50/60 transition">
-                            <td className="py-4 px-6 font-mono text-xs font-medium text-slate-700">
+                          <tr key={item.studentId} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3.5 px-4 font-mono text-xs font-semibold text-sky-700">
                               {item.registrationNumber}
                             </td>
-                            <td className="py-4 px-6 font-semibold text-slate-900">
+                            <td className="py-3.5 px-4 font-medium text-slate-900">
                               {item.studentName}
                             </td>
-                            <td className="py-4 px-6">
-                              {item.attemptStatus === "SUBMITTED" ? (
-                                <Badge className="bg-blue-50 text-blue-700 border-blue-200">Submitted</Badge>
-                              ) : item.attemptStatus === "IN_PROGRESS" ? (
-                                <Badge className="bg-amber-50 text-amber-700 border-amber-200">In Progress</Badge>
+                            <td className="py-3.5 px-4">
+                              {item.attemptStatus && item.attemptStatus.toUpperCase() === "SUBMITTED" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                                  Submitted
+                                </span>
+                              ) : item.attemptStatus && item.attemptStatus.toUpperCase().replace(/\s+/g, "_") === "IN_PROGRESS" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  In Progress
+                                </span>
                               ) : (
-                                <Badge className="bg-slate-100 text-slate-500 border-slate-200">Not Attempted</Badge>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                                  Not Attempted
+                                </span>
                               )}
                             </td>
-                            <td className="py-4 px-6">
+                            <td className="py-3.5 px-4">
                               {isGraded ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Completed</Badge>
-                              ) : item.gradingStatus === "IN_PROGRESS" ? (
-                                <Badge className="bg-purple-50 text-purple-700 border-purple-200">Draft</Badge>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Completed
+                                </span>
+                              ) : item.gradingStatus && item.gradingStatus.toUpperCase().replace(/\s+/g, "_") === "IN_PROGRESS" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                  Draft
+                                </span>
                               ) : (
                                 <span className="text-slate-400 text-xs">—</span>
                               )}
                             </td>
-                            <td className="py-4 px-6 font-mono font-medium">
+                            <td className="py-3.5 px-4 font-mono font-medium">
                               {item.earnedMarks !== null ? (
                                 <span className="text-slate-900 font-bold">
                                   {Number(item.earnedMarks).toFixed(2)}{" "}
@@ -424,22 +467,24 @@ export default function ExamOfficerResultsPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="py-4 px-6">
+                            <td className="py-3.5 px-4">
                               {isPublished ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                   Published
-                                </Badge>
+                                </span>
                               ) : (
-                                <Badge className="bg-slate-100 text-slate-600 border-slate-200">Draft</Badge>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                  Draft
+                                </span>
                               )}
                             </td>
-                            <td className="py-4 px-6 text-right space-x-2">
+                            <td className="py-3.5 px-4 text-right space-x-2">
                               {isReadyToPublish && item.resultId && (
                                 <Button
                                   size="sm"
                                   onClick={() => handlePublishSingle(item.resultId!)}
                                   disabled={publishingId === item.resultId}
-                                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs"
                                 >
                                   <Send className="h-3 w-3" />
                                   {publishingId === item.resultId ? "Publishing..." : "Publish Result"}
@@ -449,11 +494,11 @@ export default function ExamOfficerResultsPage() {
                               {isPublished && item.resultId && (
                                 <Button
                                   size="sm"
-                                  variant="ghost"
+                                  variant="outline"
                                   onClick={() => openCorrectionModal(item)}
-                                  className="h-8 text-xs text-slate-600 hover:text-slate-900 gap-1"
+                                  className="h-8 text-xs text-slate-600 hover:text-slate-900 gap-1 border-slate-200"
                                 >
-                                  <Edit3 className="h-3.5 w-3.5" />
+                                  <Edit3 className="h-3.5 w-3.5 text-sky-600" />
                                   Audit Correction
                                 </Button>
                               )}
@@ -470,14 +515,14 @@ export default function ExamOfficerResultsPage() {
 
           {/* Audit Correction Modal */}
           {correctingItem && (
-            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-              <Card className="w-full max-w-md bg-white border-slate-200 shadow-xl">
-                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <Card className="w-full max-w-md bg-white border-slate-200 shadow-xl rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 bg-slate-50/50">
                   <div>
-                    <CardTitle className="text-lg font-bold text-slate-900">
+                    <CardTitle className="text-base font-bold text-slate-900">
                       Audit Correction (Official Publication)
                     </CardTitle>
-                    <CardDescription className="text-xs">
+                    <CardDescription className="text-xs text-slate-500">
                       Official correction recorded in compliance audit log.
                     </CardDescription>
                   </div>
@@ -485,7 +530,7 @@ export default function ExamOfficerResultsPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setCorrectingItem(null)}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -500,7 +545,7 @@ export default function ExamOfficerResultsPage() {
                       </p>
                       <p>
                         <span className="font-semibold text-slate-700">Current Earned Marks: </span>
-                        <span className="font-mono font-bold text-primary">
+                        <span className="font-mono font-bold text-sky-700">
                           {correctingItem.earnedMarks !== null ? Number(correctingItem.earnedMarks).toFixed(2) : "0.00"}
                         </span>{" "}
                         / {correctingItem.totalMarks ? Number(correctingItem.totalMarks).toFixed(2) : "—"}
@@ -520,7 +565,7 @@ export default function ExamOfficerResultsPage() {
                         value={newEarnedMarks}
                         onChange={(e) => setNewEarnedMarks(e.target.value)}
                         placeholder="e.g. 24.50"
-                        className="font-mono text-sm"
+                        className="font-mono text-xs bg-slate-50 border-slate-200"
                       />
                     </div>
 
@@ -534,7 +579,7 @@ export default function ExamOfficerResultsPage() {
                         value={correctionReason}
                         onChange={(e) => setCorrectionReason(e.target.value)}
                         placeholder="Official justification for altering published examination marks..."
-                        className="w-full text-xs rounded-lg border border-slate-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 p-2.5 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-slate-900"
                       />
                     </div>
                   </CardContent>
@@ -546,6 +591,7 @@ export default function ExamOfficerResultsPage() {
                       size="sm"
                       onClick={() => setCorrectingItem(null)}
                       disabled={submittingCorrection}
+                      className="text-xs"
                     >
                       Cancel
                     </Button>
@@ -553,6 +599,7 @@ export default function ExamOfficerResultsPage() {
                       type="submit"
                       size="sm"
                       disabled={submittingCorrection}
+                      className="bg-sky-600 hover:bg-sky-700 text-white text-xs shadow-xs"
                     >
                       {submittingCorrection ? "Auditing..." : "Save Correction"}
                     </Button>
@@ -564,5 +611,22 @@ export default function ExamOfficerResultsPage() {
         </div>
       </DashboardShell>
     </ProtectedRoute>
+  );
+}
+
+export default function ExamOfficerResultsPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardShell>
+          <div className="py-24 text-center text-slate-400">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
+            <p className="text-sm">Loading examination results...</p>
+          </div>
+        </DashboardShell>
+      }
+    >
+      <ExamOfficerResultsContent />
+    </Suspense>
   );
 }

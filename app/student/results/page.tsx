@@ -386,9 +386,11 @@ export default function StudentResultsPage() {
                                           <span className="text-xs font-bold text-slate-700">
                                             Q{idx + 1}.
                                           </span>
-                                          <Badge variant="outline" className="text-[10px] uppercase font-mono">
-                                            {item.questionType.replace(/_/g, " ")}
-                                          </Badge>
+                                          {item.questionType && (
+                                            <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                                              {item.questionType.replace(/_/g, " ")}
+                                            </Badge>
+                                          )}
                                           {item.isAutoGraded && (
                                             <span className="text-[10px] text-blue-600 font-medium">
                                               (Auto-Graded)

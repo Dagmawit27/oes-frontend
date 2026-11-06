@@ -121,7 +121,7 @@ function ExamOfficerReviewContent() {
     return (
       <DashboardShell>
         <div className="py-24 text-center text-slate-400">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
           <p className="text-sm">Loading examination for audit...</p>
         </div>
       </DashboardShell>
@@ -198,7 +198,7 @@ function ExamOfficerReviewContent() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border border-slate-200 shadow-xs bg-white">
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg">
+              <div className="p-2.5 bg-sky-50 text-sky-600 rounded-lg">
                 <Clock className="h-5 w-5" />
               </div>
               <div>
@@ -234,7 +234,7 @@ function ExamOfficerReviewContent() {
 
           <Card className="border border-slate-200 shadow-xs bg-white">
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2.5 bg-purple-50 text-purple-600 rounded-lg">
+              <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
                 <Layers className="h-5 w-5" />
               </div>
               <div>
@@ -326,7 +326,7 @@ function ExamOfficerReviewContent() {
                       </div>
 
                       <div className="flex items-center gap-3 shrink-0">
-                        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 font-bold text-xs">
+                        <Badge className="bg-sky-50 text-sky-700 border-sky-200 font-bold text-xs">
                           {q.marks} Marks
                         </Badge>
                         {expandedQuestionId === q.questionId ? (
@@ -459,7 +459,7 @@ function ExamOfficerReviewContent() {
                   }
                   value={reviewComments}
                   onChange={(e) => setReviewComments(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 p-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full rounded-md border border-slate-300 p-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
 
@@ -505,7 +505,7 @@ export default function ExamOfficerReviewPage() {
       fallback={
         <DashboardShell>
           <div className="py-24 text-center text-slate-400">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
             <p className="text-sm">Loading examination review...</p>
           </div>
         </DashboardShell>

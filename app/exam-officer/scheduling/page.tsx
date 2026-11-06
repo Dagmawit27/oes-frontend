@@ -294,7 +294,7 @@ function ExamOfficerSchedulingContent() {
 
   // Pastel colors palette for calendar exam cards
   const cardColorStyles = [
-    { bg: "bg-indigo-50/80 border-indigo-200 text-indigo-900", badge: "bg-indigo-100 text-indigo-800" },
+    { bg: "bg-sky-50/80 border-sky-200 text-sky-900", badge: "bg-sky-100 text-sky-800" },
     { bg: "bg-emerald-50/80 border-emerald-200 text-emerald-900", badge: "bg-emerald-100 text-emerald-800" },
     { bg: "bg-amber-50/80 border-amber-200 text-amber-900", badge: "bg-amber-100 text-amber-800" },
     { bg: "bg-purple-50/80 border-purple-200 text-purple-900", badge: "bg-purple-100 text-purple-800" },
@@ -308,7 +308,7 @@ function ExamOfficerSchedulingContent() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-              <CalendarClock className="h-7 w-7 text-indigo-600" />
+              <CalendarClock className="h-7 w-7 text-sky-600" />
               Examination Scheduling & Timetable
             </h1>
             <p className="text-sm text-slate-500 mt-1">
@@ -322,7 +322,7 @@ function ExamOfficerSchedulingContent() {
                 onClick={() => setViewMode("calendar")}
                 className={`px-3 py-1.5 rounded-md transition-all ${
                   viewMode === "calendar"
-                    ? "bg-white text-indigo-700 shadow-xs"
+                    ? "bg-white text-sky-700 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -332,7 +332,7 @@ function ExamOfficerSchedulingContent() {
                 onClick={() => setViewMode("list")}
                 className={`px-3 py-1.5 rounded-md transition-all ${
                   viewMode === "list"
-                    ? "bg-white text-indigo-700 shadow-xs"
+                    ? "bg-white text-sky-700 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -346,7 +346,7 @@ function ExamOfficerSchedulingContent() {
                 setScheduleDate(today);
                 setShowCreateModal(true);
               }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 text-xs font-medium"
+              className="bg-sky-600 hover:bg-sky-700 text-white gap-2 text-xs font-medium"
             >
               <Plus className="h-4 w-4" />
               Schedule Exam
@@ -411,13 +411,13 @@ function ExamOfficerSchedulingContent() {
                         <div
                           key={i}
                           className={`p-2.5 border-r border-slate-200 last:border-r-0 ${
-                            d.isToday ? "bg-indigo-50/60 font-bold text-indigo-700" : "text-slate-700"
+                            d.isToday ? "bg-sky-50/60 font-bold text-sky-700" : "text-slate-700"
                           }`}
                         >
                           <div className="text-[11px] font-medium text-slate-500 uppercase">{d.name}</div>
                           <div
                             className={`text-sm font-bold mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-full ${
-                              d.isToday ? "bg-indigo-600 text-white shadow-xs" : ""
+                              d.isToday ? "bg-sky-600 text-white shadow-xs" : ""
                             }`}
                           >
                             {d.dayNum}
@@ -465,7 +465,7 @@ function ExamOfficerSchedulingContent() {
                                 <div
                                   key={dayIdx}
                                   className={`p-1.5 border-r border-slate-100 last:border-r-0 relative group transition-colors ${
-                                    dayItem.isToday ? "bg-indigo-50/15" : "hover:bg-slate-50/50"
+                                    dayItem.isToday ? "bg-sky-50/15" : "hover:bg-slate-50/50"
                                   }`}
                                 >
                                   {matchedSchedules.map((s, idx) => {
@@ -549,7 +549,7 @@ function ExamOfficerSchedulingContent() {
                           key={dNum}
                           className={`h-7 w-7 mx-auto rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
                             isSelected
-                              ? "bg-indigo-600 text-white font-bold"
+                              ? "bg-sky-600 text-white font-bold"
                               : hasExam
                               ? "bg-emerald-100 text-emerald-800 font-bold"
                               : "text-slate-600 hover:bg-slate-100"
@@ -567,7 +567,7 @@ function ExamOfficerSchedulingContent() {
               <Card className="border border-slate-200 shadow-xs bg-white">
                 <CardHeader className="p-4 border-b border-slate-100 bg-slate-50/50">
                   <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-indigo-600" />
+                    <Clock className="h-4 w-4 text-sky-600" />
                     Upcoming Termtests ({schedules.length})
                   </CardTitle>
                 </CardHeader>
@@ -576,7 +576,7 @@ function ExamOfficerSchedulingContent() {
                     <Link
                       key={s.id}
                       href={`/exam-officer/scheduling/${s.id}`}
-                      className="block p-3 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all text-xs"
+                      className="block p-3 rounded-lg border border-slate-200 hover:border-sky-300 hover:bg-sky-50/30 transition-all text-xs"
                     >
                       <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
                         <span className="font-semibold text-slate-700">
@@ -591,7 +591,7 @@ function ExamOfficerSchedulingContent() {
                       <div className="font-bold text-slate-900 line-clamp-1">{s.examinationTitle}</div>
                       <div className="flex items-center justify-between text-slate-500 mt-1">
                         <span>{s.courseCode} &bull; Sec {s.section || "A"}</span>
-                        <span className="text-[11px] font-semibold text-indigo-600">
+                        <span className="text-[11px] font-semibold text-sky-600">
                           {new Date(s.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
@@ -627,7 +627,7 @@ function ExamOfficerSchedulingContent() {
                     <select
                       value={selectedStatus}
                       onChange={(e) => setSelectedStatus(e.target.value)}
-                      className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
                       <option value="ALL">All Schedule Statuses</option>
                       <option value="SCHEDULED">Scheduled</option>
@@ -642,7 +642,7 @@ function ExamOfficerSchedulingContent() {
                     <select
                       value={selectedOffering}
                       onChange={(e) => setSelectedOffering(e.target.value)}
-                      className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
                       <option value="">All Course Offerings</option>
                       {offerings.map((co) => (
@@ -678,7 +678,7 @@ function ExamOfficerSchedulingContent() {
                           <td className="py-3.5 px-4 max-w-xs">
                             <Link
                               href={`/exam-officer/scheduling/${s.id}`}
-                              className="font-semibold text-indigo-700 hover:text-indigo-900 line-clamp-1"
+                              className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-1"
                             >
                               {s.examinationTitle}
                             </Link>
@@ -724,7 +724,7 @@ function ExamOfficerSchedulingContent() {
 
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                              <Users className="h-3.5 w-3.5 text-indigo-600" />
+                              <Users className="h-3.5 w-3.5 text-sky-600" />
                               {s.eligibleStudentCount} Students
                             </div>
                           </td>
@@ -754,7 +754,7 @@ function ExamOfficerSchedulingContent() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-xl shadow-xl max-w-xl w-full p-6 animate-in fade-in zoom-in duration-150 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                <div className="flex items-center gap-2 text-indigo-600">
+                <div className="flex items-center gap-2 text-sky-600">
                   <CalendarClock className="h-5 w-5" />
                   <h3 className="text-base font-bold text-slate-900">Schedule Approved Examination</h3>
                 </div>
@@ -775,7 +775,7 @@ function ExamOfficerSchedulingContent() {
                   <select
                     value={selectedExamId}
                     onChange={(e) => setSelectedExamId(e.target.value)}
-                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
                     {approvedExams.map((e) => (
                       <option key={e.id} value={e.id}>
@@ -843,7 +843,7 @@ function ExamOfficerSchedulingContent() {
                     <select
                       value={selectedRoomId}
                       onChange={(e) => setSelectedRoomId(e.target.value)}
-                      className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
                       <option value="">No Room (Online Remote Exam)</option>
                       {rooms.map((r) => (
@@ -862,7 +862,7 @@ function ExamOfficerSchedulingContent() {
                     rows={2}
                     value={instructions}
                     onChange={(e) => setInstructions(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 p-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded-md border border-slate-300 p-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
                 </div>
 
@@ -875,7 +875,7 @@ function ExamOfficerSchedulingContent() {
                       size="sm"
                       onClick={handleCheckConflicts}
                       disabled={checkingConflict}
-                      className="text-xs gap-1.5 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                      className="text-xs gap-1.5 text-sky-700 border-sky-200 hover:bg-sky-50"
                     >
                       <ShieldCheck className="h-4 w-4" />
                       {checkingConflict ? "Analyzing Conflicts..." : "Check Student & Room Conflicts"}
@@ -934,7 +934,7 @@ function ExamOfficerSchedulingContent() {
                 <Button
                   onClick={handleCreateSchedule}
                   disabled={isSubmitting}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs gap-1.5"
+                  className="bg-sky-600 hover:bg-sky-700 text-white text-xs gap-1.5"
                 >
                   {isSubmitting ? "Scheduling..." : "Confirm & Schedule Exam"}
                 </Button>

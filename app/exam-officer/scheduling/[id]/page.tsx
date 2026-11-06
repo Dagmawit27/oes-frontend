@@ -320,7 +320,7 @@ function ScheduleDetailsContent() {
     return (
       <DashboardShell allowedRoles={["ROLE_EXAM_OFFICER", "ROLE_ADMIN"]}>
         <div className="py-20 flex flex-col items-center justify-center space-y-4">
-          <RefreshCw className="w-10 h-10 animate-spin text-emerald-600" />
+          <RefreshCw className="w-10 h-10 animate-spin text-sky-600" />
           <p className="text-slate-500 font-medium">Loading schedule information...</p>
         </div>
       </DashboardShell>

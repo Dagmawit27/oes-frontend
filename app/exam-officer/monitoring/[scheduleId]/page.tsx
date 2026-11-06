@@ -397,7 +397,7 @@ function LiveMonitoringContent() {
                         onClick={() => setStatusFilter(tab)}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                           statusFilter === tab
-                            ? "bg-slate-900 text-white"
+                            ? "bg-sky-600 text-white shadow-xs"
                             : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
                         }`}
                       >
@@ -538,7 +538,7 @@ function LiveMonitoringContent() {
                       onClick={() => setEventFilter("ALL")}
                       className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
                         eventFilter === "ALL"
-                          ? "bg-slate-900 text-white"
+                          ? "bg-sky-600 text-white shadow-xs"
                           : "text-slate-600 hover:bg-slate-100"
                       }`}
                     >
@@ -604,7 +604,7 @@ function LiveMonitoringContent() {
 
           {/* Live Announcement Modal */}
           {isAnnounceModalOpen && (
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in-50">
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in-50">
               <Card className="w-full max-w-md bg-white p-6 shadow-2xl border-slate-200">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="p-2 rounded-lg bg-amber-50 text-amber-600">

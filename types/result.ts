@@ -1,16 +1,45 @@
-export type GradingStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
-export type PublicationStatus = "DRAFT" | "PUBLISHED";
+export type GradingStatus =
+  | "PENDING"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "Pending"
+  | "In Progress"
+  | "Grading Completed"
+  | string;
+
+export type PublicationStatus =
+  | "DRAFT"
+  | "PUBLISHED"
+  | "Draft"
+  | "Published"
+  | string;
+
+export function isGradingCompleted(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().replace(/\s+/g, "_");
+  return s === "COMPLETED" || s === "GRADING_COMPLETED";
+}
+
+export function isResultPublished(status?: string | null): boolean {
+  if (!status) return false;
+  return status.toUpperCase() === "PUBLISHED";
+}
+
+export function isResultDraft(status?: string | null): boolean {
+  if (!status) return false;
+  return status.toUpperCase() === "DRAFT";
+}
 export type DisplayStatus = "NOT_ATTEMPTED" | "PENDING" | "PUBLISHED";
 
 export interface StudentGradeDetail {
   questionOrder?: number;
   examQuestionId?: number;
   questionText: string;
-  questionType: string;
+  questionType?: string;
   awardedMarks: number | null;
   maximumMarks: number | null;
   feedback: string | null;
-  isAutoGraded: boolean;
+  isAutoGraded?: boolean;
 }
 
 export interface StudentExamResult {
