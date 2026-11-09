@@ -171,12 +171,16 @@ function StudentExaminationsContent() {
 
   // Filter schedules based on search
   const filteredSchedules = useMemo(() => {
+    const q = (search || "").trim().toLowerCase();
+    // Prevent email autofill (e.g. aster@gmail.com) from clearing all examinations
+    if (!q || q.includes("@")) {
+      return schedules;
+    }
     return schedules.filter((s) => {
-      const q = search.toLowerCase();
       return (
-        s.examinationTitle.toLowerCase().includes(q) ||
-        s.courseCode.toLowerCase().includes(q) ||
-        s.courseName.toLowerCase().includes(q)
+        (s.examinationTitle && s.examinationTitle.toLowerCase().includes(q)) ||
+        (s.courseCode && s.courseCode.toLowerCase().includes(q)) ||
+        (s.courseName && s.courseName.toLowerCase().includes(q))
       );
     });
   }, [schedules, search]);
@@ -190,37 +194,27 @@ function StudentExaminationsContent() {
         ? new Date(s.startAccessEndsAt).getTime()
         : new Date(s.scheduledCloseAt).getTime();
 
-      const isResumable = Boolean(
-        s.isResumableNow ||
-        s.resumableNow ||
-        (s.attemptStatus &&
-          ["CONNECTION_PAUSED", "RESUME_REQUIRED", "ACTIVE", "IN_PROGRESS"].includes(s.attemptStatus) &&
-          (s.remainingActiveSeconds ?? 1) > 0)
+      const isSubmitted = Boolean(
+        s.attemptStatus &&
+        ["SUBMITTED", "AUTO_SUBMITTED", "EXPIRED"].includes(s.attemptStatus)
       );
 
-      const todayStr = currentTime.toISOString().split("T")[0];
-      const examDateStr = s.examinationDate || new Date(s.scheduledStartAt).toISOString().split("T")[0];
-      const isExamDay = Boolean(
-        s.isAvailableNow ||
-        s.availableNow ||
-        todayStr === examDateStr ||
-        (now >= start - 86400000 && now <= close)
+      const isResumable = Boolean(
+        !isSubmitted &&
+        Boolean(s.attemptId) &&
+        (s.isResumableNow ||
+         s.resumableNow ||
+         (s.attemptStatus &&
+           ["CONNECTION_PAUSED", "RESUME_REQUIRED", "ACTIVE", "IN_PROGRESS"].includes(s.attemptStatus) &&
+           (s.remainingActiveSeconds ?? 1) > 0))
       );
 
       const isWindowOpen = now >= start && now <= close;
-      const isBeforeStart = Boolean(
-        !isResumable &&
-        !s.attemptId &&
-        (s.isBeforeScheduledStart || s.beforeScheduledStart || (now < start))
-      );
-
-      const isStartWindowClosed = Boolean(
-        !isResumable &&
-        !s.attemptId &&
-        (s.isStartWindowClosed || s.startWindowClosed || (now > close))
-      );
+      const isBeforeStart = !isSubmitted && !isResumable && !s.attemptId && now < start;
+      const isStartWindowClosed = !isSubmitted && !isResumable && !s.attemptId && now > close;
 
       const isStartable = Boolean(
+        !isSubmitted &&
         !isResumable &&
         !s.attemptId &&
         (s.isStartableNow || s.startableNow || isWindowOpen) &&
@@ -228,15 +222,37 @@ function StudentExaminationsContent() {
         (s.status === "SCHEDULED" || s.status === "RESCHEDULED")
       );
 
+      // Concluded or Past: student already submitted, or schedule cancelled/completed, or access window elapsed
+      const isPastOrConcluded = Boolean(
+        isSubmitted ||
+        s.status === "COMPLETED" ||
+        s.status === "CANCELLED" ||
+        now >= close
+      );
+
+      // Available now: eligible, not finished/past, and actively startable or resumable right now
       const isAvailable = Boolean(
-        (s.isAvailableNow || s.availableNow || isExamDay || isResumable || isStartable || isBeforeStart) &&
+        !isPastOrConcluded &&
+        (isResumable || isStartable) &&
         s.eligibilityStatus === "ELIGIBLE" &&
         s.status !== "CANCELLED" &&
         s.status !== "COMPLETED"
       );
 
+      // Upcoming: eligible, not finished/past, not available right now, scheduled for today's future time or a future date
+      const isUpcoming = Boolean(
+        !isPastOrConcluded &&
+        !isAvailable &&
+        !isResumable &&
+        !isStartable &&
+        (s.status === "SCHEDULED" || s.status === "RESCHEDULED")
+      );
+
       return {
         ...s,
+        isSubmitted,
+        isPastOrConcluded,
+        isUpcoming,
         isAvailableNow: isAvailable,
         isStartableNow: isStartable,
         isResumableNow: isResumable,
@@ -248,34 +264,16 @@ function StudentExaminationsContent() {
 
   // Categorize schedules authoritatively from normalized fields
   const availableExams = useMemo(() => {
-    return normalizedSchedules.filter((s) => {
-      return (
-        s.status !== "CANCELLED" &&
-        s.eligibilityStatus === "ELIGIBLE" &&
-        (s.isAvailableNow || s.isStartableNow || s.isResumableNow || s.isBeforeScheduledStart)
-      );
-    });
+    return normalizedSchedules.filter((s) => s.isAvailableNow);
   }, [normalizedSchedules]);
 
   const upcomingExams = useMemo(() => {
-    return normalizedSchedules.filter((s) => {
-      return (
-        (s.status === "SCHEDULED" || s.status === "RESCHEDULED") &&
-        !s.isAvailableNow &&
-        !s.isStartableNow &&
-        !s.isResumableNow &&
-        !s.isBeforeScheduledStart
-      );
-    });
+    return normalizedSchedules.filter((s) => s.isUpcoming);
   }, [normalizedSchedules]);
 
   const pastExams = useMemo(() => {
-    return normalizedSchedules.filter((s) => {
-      const now = currentTime.getTime();
-      const close = new Date(s.scheduledCloseAt).getTime();
-      return s.status === "COMPLETED" || s.status === "CANCELLED" || now >= close;
-    });
-  }, [normalizedSchedules, currentTime]);
+    return normalizedSchedules.filter((s) => s.isPastOrConcluded);
+  }, [normalizedSchedules]);
 
   // Calculate remaining time countdown string
   const formatCountdown = (targetDateString: string, isStartCountdown = false) => {
@@ -404,28 +402,39 @@ function StudentExaminationsContent() {
           </div>
 
           <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <Input
               type="search"
-              name="oes_portal_search_no_autofill"
-              id="oes_portal_search_no_autofill"
-              autoComplete="new-password"
+              name="oes_portal_search_filter"
+              id="oes_portal_search_filter"
+              autoComplete="off"
               autoCorrect="off"
               autoCapitalize="none"
               spellCheck={false}
               data-lpignore="true"
+              data-form-type="other"
               placeholder="Search exam or course code..."
               value={search}
+              readOnly
+              onFocus={(e) => e.target.removeAttribute("readOnly")}
               onChange={(e) => {
                 const val = e.target.value;
-                // Prevent autofilled emails (e.g. aster@gmail.com) from hijacking the search filter
-                if (val.includes("@") && !schedules.some((s) => s.courseName?.includes("@") || s.courseCode?.includes("@"))) {
+                if (val.includes("@")) {
                   return;
                 }
                 setSearch(val);
               }}
-              className="pl-9 h-9 text-xs"
+              className="pl-9 pr-7 h-9 text-xs"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 font-bold"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
 
@@ -783,18 +792,43 @@ function StudentExaminationsContent() {
                           <Badge
                             variant="outline"
                             className={
-                              exam.status === "COMPLETED"
+                              exam.attemptStatus === "SUBMITTED" || exam.attemptStatus === "AUTO_SUBMITTED"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : exam.attemptStatus === "EXPIRED"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : exam.status === "COMPLETED"
                                 ? "bg-slate-100 text-slate-700 border-slate-200"
                                 : exam.status === "CANCELLED"
                                 ? "bg-rose-50 text-rose-700 border-rose-200"
                                 : "bg-slate-100 text-slate-600"
                             }
                           >
-                            {exam.status === "SCHEDULED" ? "Window Concluded" : exam.status}
+                            {exam.attemptStatus === "SUBMITTED"
+                              ? "Submitted"
+                              : exam.attemptStatus === "AUTO_SUBMITTED"
+                              ? "Auto-Submitted"
+                              : exam.attemptStatus === "EXPIRED"
+                              ? "Expired"
+                              : exam.status === "SCHEDULED"
+                              ? "Window Concluded"
+                              : exam.status}
                           </Badge>
                         </td>
-                        <td className="py-3.5 px-4 text-right text-xs text-slate-400">
-                          Archived
+                        <td className="py-3.5 px-4 text-right text-xs">
+                          {exam.attemptStatus === "SUBMITTED" || exam.attemptStatus === "AUTO_SUBMITTED" ? (
+                            <Link href="/student/results">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold gap-1 inline-flex items-center"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>View Results</span>
+                              </Button>
+                            </Link>
+                          ) : (
+                            <span className="text-slate-400">Archived</span>
+                          )}
                         </td>
                       </tr>
                     ))}
