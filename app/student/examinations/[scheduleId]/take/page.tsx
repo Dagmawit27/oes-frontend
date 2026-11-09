@@ -73,6 +73,53 @@ function ExamRunnerContent() {
 
   // Debounce ref for text answers
   const saveTimeoutRef = useRef<Record<number, NodeJS.Timeout>>({});
+  // Guard ref to ensure exam is loaded only once per mount
+  const hasLoadedRef = useRef(false);
+
+  // Helper to initialize exam state from payload
+  const initializeWithPayload = useCallback((payload: ExamExecutionPayload) => {
+    setExamData(payload);
+
+    // Populate initial answer states from savedAnswers
+    const initialAnswers: Record<number, AnswerState> = {};
+    payload.questions?.forEach((q) => {
+      const saved = payload.savedAnswers?.find(
+        (a) => a.examQuestionId === q.examQuestionId
+      );
+      initialAnswers[q.examQuestionId] = {
+        selectedOptionIds: saved?.selectedOptionIds || [],
+        answerText: saved?.answerText || "",
+        isFlagged: saved?.isFlagged || false,
+        syncStatus: "synced",
+      };
+    });
+    setAnswers(initialAnswers);
+
+    // Calculate initial remaining seconds using authoritative server active seconds
+    const remainingSecs =
+      typeof payload.remainingActiveSeconds === "number"
+        ? payload.remainingActiveSeconds
+        : Math.max(
+            0,
+            Math.floor(
+              ((payload.deadlineAt ? new Date(payload.deadlineAt).getTime() : Date.now()) -
+                (payload.serverCurrentTime ? new Date(payload.serverCurrentTime).getTime() : Date.now())) /
+                1000
+            )
+          );
+    setTimeRemaining(remainingSecs);
+
+    // Check if attempt is currently paused
+    if (payload.status === "CONNECTION_PAUSED" || payload.status === "RESUME_REQUIRED") {
+      setIsAttemptPaused(true);
+      setRequiredResumeStage(payload.resumeStage ? (payload.resumeStage >= 2 ? 2 : 1) : 1);
+      setPausedAttemptId(payload.attemptId);
+    } else {
+      setIsAttemptPaused(false);
+      // Immediately send heartbeat to reset server heartbeat timestamp
+      executionApi.sendHeartbeat(payload.attemptId).catch(() => {});
+    }
+  }, []);
 
   // 1. Initial Load: Start or resume exam
   useEffect(() => {
@@ -80,46 +127,40 @@ function ExamRunnerContent() {
       return;
     }
 
+    if (hasLoadedRef.current) {
+      return;
+    }
+
     const loadExam = async () => {
+      // 1. Check if payload was pre-fetched during passcode entry on the previous page
+      try {
+        const cachedStr =
+          typeof window !== "undefined"
+            ? sessionStorage.getItem(`exam_payload_${scheduleId}`)
+            : null;
+        if (cachedStr) {
+          sessionStorage.removeItem(`exam_payload_${scheduleId}`);
+          const payload = JSON.parse(cachedStr) as ExamExecutionPayload;
+          if (payload && payload.questions && payload.questions.length > 0) {
+            hasLoadedRef.current = true;
+            initializeWithPayload(payload);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not read preloaded session payload", e);
+      }
+
+      // 2. Fetch directly from backend if not pre-cached
       try {
         setLoading(true);
         const res = await executionApi.startOrResumeExam(scheduleId);
         if (res.success && res.data) {
-          const payload = res.data;
-          setExamData(payload);
-
-          // Populate initial answer states from savedAnswers
-          const initialAnswers: Record<number, AnswerState> = {};
-          payload.questions?.forEach((q) => {
-            const saved = payload.savedAnswers?.find(
-              (a) => a.examQuestionId === q.examQuestionId
-            );
-            initialAnswers[q.examQuestionId] = {
-              selectedOptionIds: saved?.selectedOptionIds || [],
-              answerText: saved?.answerText || "",
-              isFlagged: saved?.isFlagged || false,
-              syncStatus: "synced",
-            };
-          });
-          setAnswers(initialAnswers);
-
-          // Calculate initial remaining seconds using authoritative server active seconds
-          const remainingSecs = typeof payload.remainingActiveSeconds === "number"
-            ? payload.remainingActiveSeconds
-            : Math.max(0, Math.floor(((payload.deadlineAt ? new Date(payload.deadlineAt).getTime() : Date.now()) - (payload.serverCurrentTime ? new Date(payload.serverCurrentTime).getTime() : Date.now())) / 1000));
-          setTimeRemaining(remainingSecs);
-
-          // Check if attempt is currently paused
-          if (payload.status === "CONNECTION_PAUSED" || payload.status === "RESUME_REQUIRED") {
-            setIsAttemptPaused(true);
-            setRequiredResumeStage(payload.resumeStage ? (payload.resumeStage >= 2 ? 2 : 1) : 1);
-            setPausedAttemptId(payload.attemptId);
-          } else {
-            setIsAttemptPaused(false);
-          }
+          hasLoadedRef.current = true;
+          initializeWithPayload(res.data);
         } else {
           toast.error(res.message || "Failed to initiate examination.");
-          router.push("/student/examinations");
         }
       } catch (err: unknown) {
         const error = err as { response?: { data?: { message?: string } } };
@@ -136,7 +177,6 @@ function ExamRunnerContent() {
           toast.info(msg);
         } else {
           toast.error(msg || "Unable to start examination. Please check schedule eligibility.");
-          router.push("/student/examinations");
         }
       } finally {
         setLoading(false);
@@ -144,7 +184,7 @@ function ExamRunnerContent() {
     };
 
     loadExam();
-  }, [scheduleId, router]);
+  }, [scheduleId, initializeWithPayload]);
 
   // 2. Periodic Individual Heartbeat Synchronization (every 12 seconds)
   useEffect(() => {
@@ -515,6 +555,7 @@ function ExamRunnerContent() {
 
         setIsAttemptPaused(false);
         setResumePasscode("");
+        executionApi.sendHeartbeat(payload.attemptId).catch(() => {});
         toast.success("Examination resumed successfully with preserved active time.");
       } else {
         toast.error(res.message || "Failed to resume examination.");
@@ -689,13 +730,33 @@ function ExamRunnerContent() {
                   handleResumeAttempt();
                 }}
                 className="space-y-4"
+                autoComplete="off"
               >
+                {/* Dummy inputs to absorb browser password managers */}
+                <input
+                  type="text"
+                  name="fake_resume_user"
+                  autoComplete="username"
+                  style={{ position: "absolute", opacity: 0, pointerEvents: "none", height: 0, width: 0 }}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+                <input
+                  type="password"
+                  name="fake_resume_pass"
+                  autoComplete="current-password"
+                  style={{ position: "absolute", opacity: 0, pointerEvents: "none", height: 0, width: 0 }}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 block text-center">
                     Enter 4-Digit Resume Passcode
                   </label>
                   <Input
-                    type="password"
+                    type="text"
+                    style={{ WebkitTextSecurity: "disc" } as React.CSSProperties}
                     name="oes_resume_passcode"
                     autoComplete="one-time-code"
                     inputMode="numeric"
@@ -734,11 +795,39 @@ function ExamRunnerContent() {
 
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
-        <div>
+        <div className="space-y-4 max-w-sm">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
           <h2 className="text-xl font-bold text-slate-800">No Examination Content Available</h2>
-          <Button onClick={() => router.push("/student/examinations")} className="mt-4">
-            Back to Portal
-          </Button>
+          <p className="text-xs text-slate-500">
+            Could not synchronize test delivery with the examination server. If you were disconnected, click Retry below.
+          </p>
+          <div className="flex gap-2 justify-center pt-2">
+            <Button
+              onClick={() => {
+                hasLoadedRef.current = false;
+                setLoading(true);
+                executionApi.startOrResumeExam(scheduleId!)
+                  .then((res) => {
+                    if (res.success && res.data) {
+                      hasLoadedRef.current = true;
+                      initializeWithPayload(res.data);
+                    }
+                  })
+                  .catch((err) => {
+                    toast.error(err?.response?.data?.message || "Failed to connect to exam server");
+                  })
+                  .finally(() => setLoading(false));
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              Retry Connection
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/student/examinations")}>
+              Back to Portal
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -1301,14 +1390,35 @@ function ExamRunnerContent() {
                   handleResumeAttempt();
                 }}
                 className="space-y-4"
+                autoComplete="off"
               >
+                {/* Dummy inputs to absorb browser password managers */}
+                <input
+                  type="text"
+                  name="fake_resume_overlay_user"
+                  autoComplete="username"
+                  style={{ position: "absolute", opacity: 0, pointerEvents: "none", height: 0, width: 0 }}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+                <input
+                  type="password"
+                  name="fake_resume_overlay_pass"
+                  autoComplete="current-password"
+                  style={{ position: "absolute", opacity: 0, pointerEvents: "none", height: 0, width: 0 }}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 block text-center">
                     Enter 4-Digit Resume Passcode
                   </label>
                   <Input
-                    type="password"
+                    type="text"
+                    style={{ WebkitTextSecurity: "disc" } as React.CSSProperties}
                     name="oes_resume_passcode_overlay"
+                    autoComplete="one-time-code"
                     inputMode="numeric"
                     maxLength={4}
                     autoFocus

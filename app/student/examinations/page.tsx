@@ -102,6 +102,9 @@ function StudentExaminationsContent() {
           passcode: passcodeModal.passcode.trim(),
         });
         if (res.success && res.data) {
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(`exam_payload_${passcodeModal.schedule.scheduleId}`, JSON.stringify(res.data));
+          }
           toast.success("Passcode verified! Examination session starting.");
           setPasscodeModal((prev) => ({ ...prev, isOpen: false }));
           router.push(`/student/examinations/${passcodeModal.schedule.scheduleId}/take`);
@@ -112,6 +115,9 @@ function StudentExaminationsContent() {
           passcode: passcodeModal.passcode.trim(),
         });
         if (res.success && res.data) {
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(`exam_payload_${passcodeModal.schedule.scheduleId}`, JSON.stringify(res.data));
+          }
           toast.success("Resume passcode verified! Resuming examination session.");
           setPasscodeModal((prev) => ({ ...prev, isOpen: false }));
           router.push(`/student/examinations/${passcodeModal.schedule.scheduleId}/take`);
@@ -121,6 +127,7 @@ function StudentExaminationsContent() {
       const msg = err?.response?.data?.message || "Invalid passcode or unable to start examination.";
       setPasscodeModal((prev) => ({ ...prev, error: msg }));
       toast.error(msg);
+      loadData();
     } finally {
       setPasscodeModal((prev) => ({ ...prev, isSubmitting: false }));
     }
@@ -401,13 +408,22 @@ function StudentExaminationsContent() {
             <Input
               type="search"
               name="oes_portal_search_no_autofill"
-              autoComplete="off"
+              id="oes_portal_search_no_autofill"
+              autoComplete="new-password"
               autoCorrect="off"
+              autoCapitalize="none"
               spellCheck={false}
               data-lpignore="true"
               placeholder="Search exam or course code..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Prevent autofilled emails (e.g. aster@gmail.com) from hijacking the search filter
+                if (val.includes("@") && !schedules.some((s) => s.courseName?.includes("@") || s.courseCode?.includes("@"))) {
+                  return;
+                }
+                setSearch(val);
+              }}
               className="pl-9 h-9 text-xs"
             />
           </div>
@@ -903,6 +919,24 @@ function StudentExaminationsContent() {
                 }}
                 autoComplete="off"
               >
+                {/* Dummy inputs to absorb browser password managers and prevent background autofill */}
+                <input
+                  type="text"
+                  name="fake_portal_username"
+                  autoComplete="username"
+                  style={{ position: "absolute", opacity: 0, pointerEvents: "none", height: 0, width: 0 }}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+                <input
+                  type="password"
+                  name="fake_portal_password"
+                  autoComplete="current-password"
+                  style={{ position: "absolute", opacity: 0, pointerEvents: "none", height: 0, width: 0 }}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+
                 <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                   <div className="flex items-center gap-2">
                     <KeyRound className="w-5 h-5 text-emerald-600" />
@@ -947,7 +981,8 @@ function StudentExaminationsContent() {
                       Enter 4-Digit Passcode <span className="text-rose-500">*</span>
                     </label>
                     <Input
-                      type="password"
+                      type="text"
+                      style={{ WebkitTextSecurity: "disc" } as React.CSSProperties}
                       name="exam_passcode_input"
                       autoComplete="one-time-code"
                       inputMode="numeric"
