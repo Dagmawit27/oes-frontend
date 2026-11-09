@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { scheduleApi } from "@/lib/api/schedule";
+import { executionApi } from "@/lib/api/execution";
 import { StudentSchedule, ExamNotification, ScheduleStatus, EligibilityStatus } from "@/types/schedule";
 import {
   FileSpreadsheet,
@@ -28,6 +29,9 @@ import {
   Timer,
   AlertCircle,
   HelpCircle,
+  Lock,
+  KeyRound,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,6 +44,87 @@ function StudentExaminationsContent() {
   const [search, setSearch] = useState("");
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [selectedExamDetails, setSelectedExamDetails] = useState<StudentSchedule | null>(null);
+
+  // Passcode Verification Modal
+  const [passcodeModal, setPasscodeModal] = useState<{
+    isOpen: boolean;
+    schedule: StudentSchedule | null;
+    mode: "START" | "RESUME";
+    passcode: string;
+    isSubmitting: boolean;
+    error?: string;
+  }>({
+    isOpen: false,
+    schedule: null,
+    mode: "START",
+    passcode: "",
+    isSubmitting: false,
+  });
+
+  const openStartPasscodeModal = (schedule: StudentSchedule) => {
+    setPasscodeModal({
+      isOpen: true,
+      schedule,
+      mode: "START",
+      passcode: "",
+      isSubmitting: false,
+      error: undefined,
+    });
+  };
+
+  const openResumePasscodeModal = (schedule: StudentSchedule) => {
+    setPasscodeModal({
+      isOpen: true,
+      schedule,
+      mode: "RESUME",
+      passcode: "",
+      isSubmitting: false,
+      error: undefined,
+    });
+  };
+
+  const handlePasscodeSubmit = async () => {
+    if (!passcodeModal.schedule || !passcodeModal.passcode) {
+      toast.error("Please enter your 4-digit passcode.");
+      return;
+    }
+
+    if (!/^\d{4}$/.test(passcodeModal.passcode.trim())) {
+      toast.error("Passcode must be exactly 4 numeric digits.");
+      return;
+    }
+
+    try {
+      setPasscodeModal((prev) => ({ ...prev, isSubmitting: true, error: undefined }));
+      if (passcodeModal.mode === "START") {
+        const res = await executionApi.startExam({
+          scheduleId: passcodeModal.schedule.scheduleId,
+          passcode: passcodeModal.passcode.trim(),
+        });
+        if (res.success && res.data) {
+          toast.success("Passcode verified! Examination session starting.");
+          setPasscodeModal((prev) => ({ ...prev, isOpen: false }));
+          router.push(`/student/examinations/${passcodeModal.schedule.scheduleId}/take`);
+        }
+      } else {
+        const res = await executionApi.resumeExam({
+          attemptId: passcodeModal.schedule.attemptId!,
+          passcode: passcodeModal.passcode.trim(),
+        });
+        if (res.success && res.data) {
+          toast.success("Resume passcode verified! Resuming examination session.");
+          setPasscodeModal((prev) => ({ ...prev, isOpen: false }));
+          router.push(`/student/examinations/${passcodeModal.schedule.scheduleId}/take`);
+        }
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Invalid passcode or unable to start examination.";
+      setPasscodeModal((prev) => ({ ...prev, error: msg }));
+      toast.error(msg);
+    } finally {
+      setPasscodeModal((prev) => ({ ...prev, isSubmitting: false }));
+    }
+  };
 
   // Live timer tick with safe deterministic initial value for prerender
   const [currentTime, setCurrentTime] = useState<Date>(
@@ -89,44 +174,108 @@ function StudentExaminationsContent() {
     });
   }, [schedules, search]);
 
-  // Categorize schedules
-  const availableExams = useMemo(() => {
-    return filteredSchedules.filter((s) => {
+  // Normalize each schedule with robust time-window and Jackson alias evaluation
+  const normalizedSchedules = useMemo(() => {
+    return filteredSchedules.map((s) => {
       const now = currentTime.getTime();
       const start = new Date(s.scheduledStartAt).getTime();
-      const close = new Date(s.scheduledCloseAt).getTime();
+      const close = s.startAccessEndsAt
+        ? new Date(s.startAccessEndsAt).getTime()
+        : new Date(s.scheduledCloseAt).getTime();
+
+      const isResumable = Boolean(
+        s.isResumableNow ||
+        s.resumableNow ||
+        (s.attemptStatus &&
+          ["CONNECTION_PAUSED", "RESUME_REQUIRED", "ACTIVE", "IN_PROGRESS"].includes(s.attemptStatus) &&
+          (s.remainingActiveSeconds ?? 1) > 0)
+      );
+
+      const todayStr = currentTime.toISOString().split("T")[0];
+      const examDateStr = s.examinationDate || new Date(s.scheduledStartAt).toISOString().split("T")[0];
+      const isExamDay = Boolean(
+        s.isAvailableNow ||
+        s.availableNow ||
+        todayStr === examDateStr ||
+        (now >= start - 86400000 && now <= close)
+      );
+
+      const isWindowOpen = now >= start && now <= close;
+      const isBeforeStart = Boolean(
+        !isResumable &&
+        !s.attemptId &&
+        (s.isBeforeScheduledStart || s.beforeScheduledStart || (now < start))
+      );
+
+      const isStartWindowClosed = Boolean(
+        !isResumable &&
+        !s.attemptId &&
+        (s.isStartWindowClosed || s.startWindowClosed || (now > close))
+      );
+
+      const isStartable = Boolean(
+        !isResumable &&
+        !s.attemptId &&
+        (s.isStartableNow || s.startableNow || isWindowOpen) &&
+        s.eligibilityStatus === "ELIGIBLE" &&
+        (s.status === "SCHEDULED" || s.status === "RESCHEDULED")
+      );
+
+      const isAvailable = Boolean(
+        (s.isAvailableNow || s.availableNow || isExamDay || isResumable || isStartable || isBeforeStart) &&
+        s.eligibilityStatus === "ELIGIBLE" &&
+        s.status !== "CANCELLED" &&
+        s.status !== "COMPLETED"
+      );
+
+      return {
+        ...s,
+        isAvailableNow: isAvailable,
+        isStartableNow: isStartable,
+        isResumableNow: isResumable,
+        isBeforeScheduledStart: isBeforeStart,
+        isStartWindowClosed: isStartWindowClosed,
+      };
+    });
+  }, [filteredSchedules, currentTime]);
+
+  // Categorize schedules authoritatively from normalized fields
+  const availableExams = useMemo(() => {
+    return normalizedSchedules.filter((s) => {
       return (
         s.status !== "CANCELLED" &&
-        now >= start &&
-        now < close &&
-        s.eligibilityStatus === "ELIGIBLE"
+        s.eligibilityStatus === "ELIGIBLE" &&
+        (s.isAvailableNow || s.isStartableNow || s.isResumableNow || s.isBeforeScheduledStart)
       );
     });
-  }, [filteredSchedules, currentTime]);
+  }, [normalizedSchedules]);
 
   const upcomingExams = useMemo(() => {
-    return filteredSchedules.filter((s) => {
-      const now = currentTime.getTime();
-      const start = new Date(s.scheduledStartAt).getTime();
+    return normalizedSchedules.filter((s) => {
       return (
         (s.status === "SCHEDULED" || s.status === "RESCHEDULED") &&
-        now < start
+        !s.isAvailableNow &&
+        !s.isStartableNow &&
+        !s.isResumableNow &&
+        !s.isBeforeScheduledStart
       );
     });
-  }, [filteredSchedules, currentTime]);
+  }, [normalizedSchedules]);
 
   const pastExams = useMemo(() => {
-    return filteredSchedules.filter((s) => {
+    return normalizedSchedules.filter((s) => {
       const now = currentTime.getTime();
       const close = new Date(s.scheduledCloseAt).getTime();
       return s.status === "COMPLETED" || s.status === "CANCELLED" || now >= close;
     });
-  }, [filteredSchedules, currentTime]);
+  }, [normalizedSchedules, currentTime]);
 
   // Calculate remaining time countdown string
-  const formatCountdown = (targetDateString: string) => {
+  const formatCountdown = (targetDateString: string, isStartCountdown = false) => {
     const diff = new Date(targetDateString).getTime() - currentTime.getTime();
-    if (diff <= 0) return "00:00:00 (Window Closed)";
+    if (diff <= 0) {
+      return isStartCountdown ? "00:00:00 (Starting Now)" : "00:00:00 (Window Closed)";
+    }
 
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -250,6 +399,12 @@ function StudentExaminationsContent() {
           <div className="relative w-full sm:w-72">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
+              type="search"
+              name="oes_portal_search_no_autofill"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
               placeholder="Search exam or course code..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -355,28 +510,114 @@ function StudentExaminationsContent() {
                           </div>
 
                           {/* Countdown and Action */}
-                          <div className="w-full lg:w-72 bg-emerald-50/80 rounded-2xl p-4 border border-emerald-200/80 text-center space-y-3 shrink-0">
-                            <div>
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                                Effective Window Closes In
-                              </span>
-                              <div className="text-xl font-black font-mono text-emerald-900 mt-1">
-                                {formatCountdown(exam.effectiveDeadline || exam.scheduledCloseAt)}
+                          <div className="w-full lg:w-72 bg-slate-50/90 rounded-2xl p-4 border border-slate-200 text-center space-y-3 shrink-0">
+                            {exam.isResumableNow ? (
+                              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                                <span className="text-[11px] font-bold uppercase tracking-wider block">
+                                  Preserved Active Time
+                                </span>
+                                <div className="text-xl font-black font-mono mt-0.5 text-amber-900">
+                                  {Math.floor((exam.remainingActiveSeconds || 0) / 60)}m{" "}
+                                  {(exam.remainingActiveSeconds || 0) % 60}s
+                                </div>
+                                <span className="text-[10px] text-amber-700 block mt-0.5">
+                                  Stage {exam.resumeStage || 1} • Requires Passcode {exam.resumeStage && exam.resumeStage > 1 ? "3" : "2"}
+                                </span>
                               </div>
-                              <span className="text-[10px] text-emerald-700 block mt-0.5">
-                                Strict Server Deadline Enforcement
-                              </span>
-                            </div>
+                            ) : exam.isBeforeScheduledStart ? (
+                              <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-900">
+                                <span className="text-[11px] font-bold uppercase tracking-wider block">
+                                  Scheduled Start
+                                </span>
+                                <div className="text-lg font-bold mt-0.5">
+                                  {exam.scheduledStartTime || "09:00"}
+                                </div>
+                                <span className="text-[10px] text-sky-700 block mt-0.5">
+                                  Instructions available. Opens at start time.
+                                </span>
+                              </div>
+                            ) : exam.isStartWindowClosed ? (
+                              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900">
+                                <span className="text-[11px] font-bold uppercase tracking-wider block">
+                                  Start Window Closed
+                                </span>
+                                <span className="text-[10px] text-rose-700 block mt-0.5">
+                                  Closed at 23:59:59 ({exam.timezone || "Africa/Addis_Ababa"})
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                                  Individual Duration
+                                </span>
+                                <div className="text-xl font-black font-mono text-emerald-900 mt-1">
+                                  {exam.durationMinutes} Minutes
+                                </div>
+                                <span className="text-[10px] text-emerald-700 block mt-0.5">
+                                  Countdown begins after Passcode 1
+                                </span>
+                              </div>
+                            )}
 
-                            <Button
-                              onClick={() => {
-                                router.push(`/student/examinations/${exam.scheduleId}/take`);
-                              }}
-                              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm gap-2 text-sm"
-                            >
-                              <PlayCircle className="w-5 h-5" />
-                              <span>Start Examination</span>
-                            </Button>
+                            {/* Action Buttons */}
+                            <div className="space-y-2 pt-1">
+                              {exam.isResumableNow ? (
+                                <Button
+                                  onClick={() => openResumePasscodeModal(exam)}
+                                  className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs gap-2 text-xs"
+                                >
+                                  <RotateCcw className="w-4 h-4" />
+                                  <span>Resume Examination</span>
+                                </Button>
+                              ) : exam.isBeforeScheduledStart ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setSelectedExamDetails(exam)}
+                                    className="w-full text-xs text-sky-700 border-sky-300 hover:bg-sky-50"
+                                  >
+                                    <Info className="w-3.5 h-3.5 mr-1" />
+                                    Read Instructions
+                                  </Button>
+                                  <Button
+                                    disabled
+                                    className="w-full text-xs opacity-60 bg-slate-300 text-slate-600 cursor-not-allowed"
+                                  >
+                                    Opens at {exam.scheduledStartTime || "09:00"}
+                                  </Button>
+                                </>
+                              ) : exam.isStartableNow ? (
+                                <>
+                                  <Button
+                                    onClick={() => openStartPasscodeModal(exam)}
+                                    className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs gap-2 text-sm"
+                                  >
+                                    <PlayCircle className="w-4 h-4" />
+                                    <span>Start Examination</span>
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedExamDetails(exam)}
+                                    className="w-full text-xs text-slate-500 hover:text-slate-800"
+                                  >
+                                    Read Instructions First
+                                  </Button>
+                                </>
+                              ) : exam.isStartWindowClosed ? (
+                                <Button disabled className="w-full text-xs opacity-50 bg-slate-200 text-slate-500">
+                                  Start Window Closed
+                                </Button>
+                              ) : (
+                                <Button
+                                  onClick={() => openStartPasscodeModal(exam)}
+                                  className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm"
+                                >
+                                  <PlayCircle className="w-4 h-4" />
+                                  <span>Start Examination</span>
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -468,7 +709,7 @@ function StudentExaminationsContent() {
                           <div className="text-xs">
                             <span className="text-slate-400">Starts in: </span>
                             <span className="font-bold text-emerald-700">
-                              {formatCountdown(exam.scheduledStartAt)}
+                              {formatCountdown(exam.scheduledStartAt, true)}
                             </span>
                           </div>
 
@@ -647,6 +888,123 @@ function StudentExaminationsContent() {
                   Close
                 </Button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Passcode Verification Modal (Passcode 1 for Start, Passcode 2/3 for Resume) */}
+        {passcodeModal.isOpen && passcodeModal.schedule && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in duration-150">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handlePasscodeSubmit();
+                }}
+                autoComplete="off"
+              >
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="w-5 h-5 text-emerald-600" />
+                    <span className="font-bold text-slate-900">
+                      {passcodeModal.mode === "START"
+                        ? "Passcode 1 Required"
+                        : `Passcode ${passcodeModal.schedule.resumeStage && passcodeModal.schedule.resumeStage >= 2 ? "3" : "2"} Required`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPasscodeModal((prev) => ({ ...prev, isOpen: false }))}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4 text-xs">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">
+                      {passcodeModal.schedule.examinationTitle}
+                    </h4>
+                    <p className="text-slate-500">
+                      {passcodeModal.schedule.courseCode} — {passcodeModal.schedule.courseName}
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-sky-50 rounded-xl text-sky-900 space-y-1">
+                    <span className="font-bold block">
+                      {passcodeModal.mode === "START" ? "Starting Examination:" : "Resuming Examination:"}
+                    </span>
+                    <p>
+                      {passcodeModal.mode === "START"
+                        ? `You will receive your full individual duration of ${passcodeModal.schedule.durationMinutes} minutes after entering Passcode 1.`
+                        : `Your session remaining active time is preserved. Enter your proctor's Passcode ${passcodeModal.schedule.resumeStage && passcodeModal.schedule.resumeStage >= 2 ? "3" : "2"} to continue.`}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Enter 4-Digit Passcode <span className="text-rose-500">*</span>
+                    </label>
+                    <Input
+                      type="password"
+                      name="exam_passcode_input"
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      maxLength={4}
+                      placeholder="••••"
+                      value={passcodeModal.passcode}
+                      onChange={(e) =>
+                        setPasscodeModal((prev) => ({
+                          ...prev,
+                          passcode: e.target.value.replace(/\D/g, ""),
+                          error: undefined,
+                        }))
+                      }
+                      className="text-center font-mono text-lg tracking-widest h-12 font-bold"
+                      autoFocus
+                    />
+                    {passcodeModal.error && (
+                      <p className="text-rose-600 text-[11px] mt-1.5 font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        {passcodeModal.error}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPasscodeModal((prev) => ({ ...prev, isOpen: false }))}
+                    disabled={passcodeModal.isSubmitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={passcodeModal.isSubmitting || passcodeModal.passcode.length !== 4}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5"
+                  >
+                    {passcodeModal.isSubmitting ? (
+                      "Verifying..."
+                    ) : passcodeModal.mode === "START" ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        Verify & Start
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Verify & Resume
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}

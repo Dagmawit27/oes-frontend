@@ -13,6 +13,7 @@ import { MathText } from "@/components/exam/MathText";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
   Clock,
@@ -45,7 +46,8 @@ interface AnswerState {
 function ExamRunnerContent() {
   const params = useParams();
   const router = useRouter();
-  const scheduleId = Number(params?.scheduleId);
+  const scheduleIdParam = params?.scheduleId;
+  const scheduleId = scheduleIdParam ? Number(scheduleIdParam) : null;
 
   // Core examination state
   const [loading, setLoading] = useState(true);
@@ -62,14 +64,19 @@ function ExamRunnerContent() {
   const [submissionResult, setSubmissionResult] = useState<ExamSubmissionResult | null>(null);
   const [tabBlurCount, setTabBlurCount] = useState(0);
 
+  // Connection pause & resume state
+  const [isAttemptPaused, setIsAttemptPaused] = useState(false);
+  const [requiredResumeStage, setRequiredResumeStage] = useState(1);
+  const [resumePasscode, setResumePasscode] = useState("");
+  const [resumingAttempt, setResumingAttempt] = useState(false);
+  const [pausedAttemptId, setPausedAttemptId] = useState<number | null>(null);
+
   // Debounce ref for text answers
   const saveTimeoutRef = useRef<Record<number, NodeJS.Timeout>>({});
 
   // 1. Initial Load: Start or resume exam
   useEffect(() => {
-    if (!scheduleId || isNaN(scheduleId)) {
-      toast.error("Invalid examination schedule specified.");
-      router.push("/student/examinations");
+    if (scheduleId === null || isNaN(scheduleId)) {
       return;
     }
 
@@ -83,7 +90,7 @@ function ExamRunnerContent() {
 
           // Populate initial answer states from savedAnswers
           const initialAnswers: Record<number, AnswerState> = {};
-          payload.questions.forEach((q) => {
+          payload.questions?.forEach((q) => {
             const saved = payload.savedAnswers?.find(
               (a) => a.examQuestionId === q.examQuestionId
             );
@@ -96,24 +103,41 @@ function ExamRunnerContent() {
           });
           setAnswers(initialAnswers);
 
-          // Calculate initial remaining seconds
-          const deadline = new Date(payload.deadlineAt).getTime();
-          const now = payload.serverCurrentTime
-            ? new Date(payload.serverCurrentTime).getTime()
-            : Date.now();
-          const remainingSecs = Math.max(0, Math.floor((deadline - now) / 1000));
+          // Calculate initial remaining seconds using authoritative server active seconds
+          const remainingSecs = typeof payload.remainingActiveSeconds === "number"
+            ? payload.remainingActiveSeconds
+            : Math.max(0, Math.floor(((payload.deadlineAt ? new Date(payload.deadlineAt).getTime() : Date.now()) - (payload.serverCurrentTime ? new Date(payload.serverCurrentTime).getTime() : Date.now())) / 1000));
           setTimeRemaining(remainingSecs);
+
+          // Check if attempt is currently paused
+          if (payload.status === "CONNECTION_PAUSED" || payload.status === "RESUME_REQUIRED") {
+            setIsAttemptPaused(true);
+            setRequiredResumeStage(payload.resumeStage ? (payload.resumeStage >= 2 ? 2 : 1) : 1);
+            setPausedAttemptId(payload.attemptId);
+          } else {
+            setIsAttemptPaused(false);
+          }
         } else {
           toast.error(res.message || "Failed to initiate examination.");
           router.push("/student/examinations");
         }
       } catch (err: unknown) {
         const error = err as { response?: { data?: { message?: string } } };
-        toast.error(
-          error.response?.data?.message ||
-            "Unable to start examination. Please check schedule eligibility."
-        );
-        router.push("/student/examinations");
+        const msg = error.response?.data?.message || "";
+        if (
+          msg.includes("paused") ||
+          msg.includes("Resume") ||
+          msg.includes("Passcode 2") ||
+          msg.includes("Passcode 3") ||
+          msg.includes("resumption")
+        ) {
+          setIsAttemptPaused(true);
+          setRequiredResumeStage(msg.includes("Passcode 3") || msg.includes("stage 2") ? 2 : 1);
+          toast.info(msg);
+        } else {
+          toast.error(msg || "Unable to start examination. Please check schedule eligibility.");
+          router.push("/student/examinations");
+        }
       } finally {
         setLoading(false);
       }
@@ -122,12 +146,49 @@ function ExamRunnerContent() {
     loadExam();
   }, [scheduleId, router]);
 
-  // 2. High-precision Timer Countdown
+  // 2. Periodic Individual Heartbeat Synchronization (every 12 seconds)
   useEffect(() => {
-    if (timeRemaining === null || submissionResult) return;
+    if (!examData || submissionResult || isSubmitting) return;
+
+    const heartbeatInterval = setInterval(async () => {
+      try {
+        const hbRes = await executionApi.sendHeartbeat(examData.attemptId);
+        if (hbRes.success && hbRes.data) {
+          const { remainingActiveSeconds, isPaused, isTerminated, status, resumeStage } = hbRes.data;
+
+          if (typeof remainingActiveSeconds === "number") {
+            setTimeRemaining(remainingActiveSeconds);
+          }
+
+          if (isTerminated || status === "SUBMITTED" || status === "AUTO_SUBMITTED" || status === "EXPIRED") {
+            clearInterval(heartbeatInterval);
+            toast.warning("Examination time has expired. Submitting examination...");
+            handleFinalSubmit(true);
+            return;
+          }
+
+          if (isPaused || status === "CONNECTION_PAUSED" || status === "RESUME_REQUIRED") {
+            setIsAttemptPaused(true);
+            setRequiredResumeStage(resumeStage ? (resumeStage > 1 ? 2 : 1) : 1);
+            setPausedAttemptId(examData.attemptId);
+          } else if (isAttemptPaused) {
+            setIsAttemptPaused(false);
+          }
+        }
+      } catch (err) {
+        console.warn("Heartbeat missed - checking connection", err);
+      }
+    }, 12000);
+
+    return () => clearInterval(heartbeatInterval);
+  }, [examData, submissionResult, isSubmitting, isAttemptPaused]);
+
+  // 3. High-precision Individual Active-Time Countdown
+  useEffect(() => {
+    if (isAttemptPaused || timeRemaining === null || submissionResult) return;
 
     if (timeRemaining <= 0) {
-      toast.warning("Official examination deadline reached. Auto-submitting answers...");
+      toast.warning("Active examination time has expired. Auto-submitting answers...");
       handleFinalSubmit(true);
       return;
     }
@@ -144,7 +205,7 @@ function ExamRunnerContent() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeRemaining, submissionResult]);
+  }, [timeRemaining, submissionResult, isAttemptPaused]);
 
   // 3. Telemetry & Proctoring Listeners
   useEffect(() => {
@@ -414,6 +475,58 @@ function ExamRunnerContent() {
     }
   };
 
+  // Resume Attempt Handler (after disconnection or connection paused)
+  const handleResumeAttempt = async () => {
+    const attemptId = examData?.attemptId || pausedAttemptId;
+    if (!attemptId || resumePasscode.trim().length !== 4) {
+      toast.error("Please enter a valid 4-digit numeric passcode.");
+      return;
+    }
+
+    try {
+      setResumingAttempt(true);
+      const res = await executionApi.resumeExam({
+        attemptId,
+        passcode: resumePasscode.trim(),
+      });
+
+      if (res.success && res.data) {
+        const payload = res.data;
+        setExamData(payload);
+
+        // Update answer states
+        const updatedAnswers: Record<number, AnswerState> = {};
+        payload.questions.forEach((q) => {
+          const saved = payload.savedAnswers?.find(
+            (a) => a.examQuestionId === q.examQuestionId
+          );
+          updatedAnswers[q.examQuestionId] = {
+            selectedOptionIds: saved?.selectedOptionIds || [],
+            answerText: saved?.answerText || "",
+            isFlagged: saved?.isFlagged || false,
+            syncStatus: "synced",
+          };
+        });
+        setAnswers(updatedAnswers);
+
+        if (typeof payload.remainingActiveSeconds === "number") {
+          setTimeRemaining(payload.remainingActiveSeconds);
+        }
+
+        setIsAttemptPaused(false);
+        setResumePasscode("");
+        toast.success("Examination resumed successfully with preserved active time.");
+      } else {
+        toast.error(res.message || "Failed to resume examination.");
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Invalid resume passcode. Please request assistance from your invigilator.";
+      toast.error(msg);
+    } finally {
+      setResumingAttempt(false);
+    }
+  };
+
   // Compute Statistics
   const stats = useMemo(() => {
     if (!examData) return { total: 0, answered: 0, unanswered: 0, flagged: 0, percentage: 0 };
@@ -532,6 +645,93 @@ function ExamRunnerContent() {
   }
 
   if (!examData || !currentQuestion) {
+    if (isAttemptPaused) {
+      return (
+        <div className="min-h-screen bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4">
+          <Card className="max-w-md w-full bg-white border border-slate-200 shadow-2xl overflow-hidden rounded-2xl">
+            <div className="bg-amber-500/10 border-b border-amber-200/60 p-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <WifiOff className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 tracking-tight">
+                Examination Session Paused
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
+                Your connection was interrupted or heartbeats paused. Your remaining examination
+                time has been safely frozen on the server.
+              </p>
+            </div>
+
+            <CardContent className="p-6 space-y-4">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-center">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Preserved Active Remaining Time
+                </span>
+                <span className="text-2xl font-black font-mono text-slate-900">
+                  {formattedCountdown}
+                </span>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  Please contact your invigilator or exam proctor to obtain{" "}
+                  <strong className="font-bold text-amber-800">
+                    Passcode {requiredResumeStage >= 2 ? "3" : "2"}
+                  </strong>{" "}
+                  to resume.
+                </span>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleResumeAttempt();
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block text-center">
+                    Enter 4-Digit Resume Passcode
+                  </label>
+                  <Input
+                    type="password"
+                    name="oes_resume_passcode"
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    maxLength={4}
+                    autoFocus
+                    placeholder="••••"
+                    value={resumePasscode}
+                    onChange={(e) => setResumePasscode(e.target.value.replace(/\D/g, ""))}
+                    className="text-center font-mono text-2xl tracking-[0.5em] font-bold h-12 border-slate-300 focus:border-amber-500 focus:ring-amber-400"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={resumePasscode.length !== 4 || resumingAttempt}
+                  className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-md shadow-amber-600/20 text-sm gap-2"
+                >
+                  {resumingAttempt ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verifying Passcode...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Resume Examination</span>
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
         <div>
@@ -1052,6 +1252,91 @@ function ExamRunnerContent() {
                   )}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Connection Paused & Resume Passcode Modal */}
+      {isAttemptPaused && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <Card className="max-w-md w-full bg-white border border-slate-200 shadow-2xl overflow-hidden rounded-2xl">
+            <div className="bg-amber-500/10 border-b border-amber-200/60 p-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <WifiOff className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 tracking-tight">
+                Examination Session Paused
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
+                Your connection was interrupted or heartbeats paused. Your remaining examination
+                time has been safely frozen on the server.
+              </p>
+            </div>
+
+            <CardContent className="p-6 space-y-4">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-center">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Preserved Active Remaining Time
+                </span>
+                <span className="text-2xl font-black font-mono text-slate-900">
+                  {formattedCountdown}
+                </span>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  Please contact your invigilator or exam proctor to obtain{" "}
+                  <strong className="font-bold text-amber-800">
+                    Passcode {requiredResumeStage >= 2 ? "3" : "2"}
+                  </strong>{" "}
+                  to resume.
+                </span>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleResumeAttempt();
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block text-center">
+                    Enter 4-Digit Resume Passcode
+                  </label>
+                  <Input
+                    type="password"
+                    name="oes_resume_passcode_overlay"
+                    inputMode="numeric"
+                    maxLength={4}
+                    autoFocus
+                    placeholder="••••"
+                    value={resumePasscode}
+                    onChange={(e) => setResumePasscode(e.target.value.replace(/\D/g, ""))}
+                    className="text-center font-mono text-2xl tracking-[0.5em] font-bold h-12 border-slate-300 focus:border-amber-500 focus:ring-amber-400"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={resumePasscode.length !== 4 || resumingAttempt}
+                  className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-md shadow-amber-600/20 text-sm gap-2"
+                >
+                  {resumingAttempt ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verifying Passcode...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Resume Examination</span>
+                    </>
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>

@@ -6,18 +6,52 @@ import {
   StudentAnswer,
   ExamSubmissionResult,
   ExamEventLogRequest,
+  HeartbeatRequest,
+  HeartbeatResponse,
+  StartExamRequest,
+  ResumeExamRequest,
 } from "@/types/execution";
 
 export const executionApi = {
   /**
-   * Start or resume an examination attempt for an active schedule.
-   * Idempotent: Returns the active attempt with existing saved answers if already started.
+   * Start an examination attempt with Passcode 1 verification.
    */
-  async startOrResumeExam(scheduleId: number): Promise<ApiResponse<ExamExecutionPayload>> {
+  async startExam(data: StartExamRequest): Promise<ApiResponse<ExamExecutionPayload>> {
     const response = await apiClient.post<ApiResponse<ExamExecutionPayload>>(
       "/exam-execution/start",
-      null,
-      { params: { scheduleId } }
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Resume an interrupted examination attempt with Passcode 2 or Passcode 3 verification.
+   */
+  async resumeExam(data: ResumeExamRequest): Promise<ApiResponse<ExamExecutionPayload>> {
+    const response = await apiClient.post<ApiResponse<ExamExecutionPayload>>(
+      "/exam-execution/resume",
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Backward compatible wrapper for legacy calls.
+   */
+  async startOrResumeExam(scheduleId: number, passcode?: string): Promise<ApiResponse<ExamExecutionPayload>> {
+    return this.startExam({ scheduleId, passcode });
+  },
+
+  /**
+   * Periodic individual heartbeat to sync active countdown and monitor connection health.
+   */
+  async sendHeartbeat(
+    attemptId: number,
+    data?: HeartbeatRequest
+  ): Promise<ApiResponse<HeartbeatResponse>> {
+    const response = await apiClient.post<ApiResponse<HeartbeatResponse>>(
+      `/exam-execution/attempts/${attemptId}/heartbeat`,
+      data || {}
     );
     return response.data;
   },
@@ -37,7 +71,7 @@ export const executionApi = {
   },
 
   /**
-   * Submit and finalize an examination attempt.
+   * Submit and finalize an examination attempt early.
    */
   async submitExam(attemptId: number): Promise<ApiResponse<ExamSubmissionResult>> {
     const response = await apiClient.post<ApiResponse<ExamSubmissionResult>>(

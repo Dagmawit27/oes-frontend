@@ -23,7 +23,11 @@ import {
   FileText,
   User,
   GraduationCap,
+  Check,
+  X,
+  XCircle,
 } from "lucide-react";
+import { MathText } from "@/components/exam/MathText";
 import { toast } from "sonner";
 
 export default function StudentResultsPage() {
@@ -370,60 +374,199 @@ export default function StudentResultsPage() {
                           {/* Expandable Question-by-Question Breakdown */}
                           {isExpanded && exam.details && (
                             <div className="mt-6 pt-6 border-t border-slate-100 space-y-4">
-                              <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Question-by-Question Performance Breakdown
-                              </h5>
+                              <div className="flex items-center justify-between">
+                                <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                  Question-by-Question Performance & Review
+                                </h5>
+                                <div className="flex items-center gap-4 text-xs font-medium">
+                                  <span className="flex items-center gap-1.5 text-emerald-700">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                    Correct Answer
+                                  </span>
+                                  <span className="flex items-center gap-1.5 text-rose-700">
+                                    <span className="h-2 w-2 rounded-full bg-rose-500" />
+                                    Your Incorrect Choice
+                                  </span>
+                                </div>
+                              </div>
 
-                              <div className="space-y-3">
-                                {exam.details.map((item, idx) => (
-                                  <div
-                                    key={item.examQuestionId || idx}
-                                    className="p-4 rounded-lg bg-slate-50/80 border border-slate-100 text-sm space-y-2"
-                                  >
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs font-bold text-slate-700">
-                                            Q{idx + 1}.
-                                          </span>
-                                          {item.questionType && (
-                                            <Badge variant="outline" className="text-[10px] uppercase font-mono">
-                                              {item.questionType.replace(/_/g, " ")}
-                                            </Badge>
-                                          )}
-                                          {item.isAutoGraded && (
-                                            <span className="text-[10px] text-blue-600 font-medium">
-                                              (Auto-Graded)
+                              <div className="space-y-4">
+                                {exam.details.map((item, idx) => {
+                                  const isFullMarks =
+                                    item.awardedMarks !== null &&
+                                    item.maximumMarks !== null &&
+                                    Number(item.awardedMarks) === Number(item.maximumMarks) &&
+                                    Number(item.maximumMarks) > 0;
+                                  const isPartialMarks =
+                                    item.awardedMarks !== null &&
+                                    item.maximumMarks !== null &&
+                                    Number(item.awardedMarks) > 0 &&
+                                    Number(item.awardedMarks) < Number(item.maximumMarks);
+                                  const isZeroMarks =
+                                    item.awardedMarks !== null && Number(item.awardedMarks) === 0;
+
+                                  const hasOptions = item.options && item.options.length > 0;
+
+                                  return (
+                                    <div
+                                      key={item.examQuestionId || idx}
+                                      className={`p-5 rounded-xl border text-sm transition-all shadow-xs ${
+                                        isFullMarks
+                                          ? "bg-white border-slate-200"
+                                          : isZeroMarks
+                                          ? "bg-rose-50/20 border-rose-200"
+                                          : "bg-white border-slate-200"
+                                      }`}
+                                    >
+                                      {/* Question Header */}
+                                      <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100">
+                                        <div className="space-y-1.5 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-800">
+                                              Question {item.questionOrder ?? idx + 1}
                                             </span>
-                                          )}
+                                            {item.questionType && (
+                                              <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                                                {item.questionType.replace(/_/g, " ")}
+                                              </Badge>
+                                            )}
+                                            {item.isAutoGraded && (
+                                              <Badge className="bg-sky-50 text-sky-700 border border-sky-200 text-[10px]">
+                                                Auto-Graded
+                                              </Badge>
+                                            )}
+                                            {isFullMarks ? (
+                                              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] gap-1 font-semibold">
+                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Correct
+                                              </Badge>
+                                            ) : isPartialMarks ? (
+                                              <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] gap-1 font-semibold">
+                                                <AlertCircle className="w-3 h-3 text-amber-600" /> Partially Correct
+                                              </Badge>
+                                            ) : isZeroMarks ? (
+                                              <Badge className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] gap-1 font-semibold">
+                                                <XCircle className="w-3 h-3 text-rose-600" /> Incorrect
+                                              </Badge>
+                                            ) : null}
+                                          </div>
+                                          <div className="text-slate-900 font-medium text-base leading-relaxed pt-1">
+                                            <MathText text={item.questionText} />
+                                          </div>
                                         </div>
-                                        <p className="text-slate-800 font-medium">{item.questionText}</p>
+
+                                        <div className="text-right shrink-0 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/60">
+                                          <div className="text-[10px] uppercase font-semibold text-slate-400">Marks Awarded</div>
+                                          <div className="font-mono text-sm font-bold">
+                                            <span className={isFullMarks ? "text-emerald-700" : isZeroMarks ? "text-rose-600" : "text-slate-900"}>
+                                              {item.awardedMarks !== null ? Number(item.awardedMarks).toFixed(2) : "0.00"}
+                                            </span>
+                                            <span className="text-slate-400 font-normal text-xs">
+                                              {" "}
+                                              / {item.maximumMarks !== null ? Number(item.maximumMarks).toFixed(2) : "—"}
+                                            </span>
+                                          </div>
+                                        </div>
                                       </div>
 
-                                      <div className="text-right shrink-0">
-                                        <span className="font-mono font-semibold text-slate-900">
-                                          {item.awardedMarks !== null
-                                            ? Number(item.awardedMarks).toFixed(2)
-                                            : "Ungraded"}
-                                        </span>
-                                        <span className="text-slate-400 font-mono text-xs">
-                                          {" "}
-                                          /{" "}
-                                          {item.maximumMarks !== null
-                                            ? Number(item.maximumMarks).toFixed(2)
-                                            : "—"}
-                                        </span>
-                                      </div>
+                                      {/* Options List (Objective questions) */}
+                                      {hasOptions && (
+                                        <div className="space-y-2 pt-3">
+                                          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
+                                            Options & Your Selection:
+                                          </span>
+                                          <div className="space-y-2">
+                                            {item.options!.map((opt, optIdx) => {
+                                              const isSelected = !!opt.isSelectedByStudent;
+                                              const isCorrect = !!opt.isCorrect;
+
+                                              return (
+                                                <div
+                                                  key={opt.id || optIdx}
+                                                  className={`p-3 rounded-xl border text-sm flex items-center justify-between transition-all ${
+                                                    isSelected && isCorrect
+                                                      ? "bg-emerald-50/90 border-emerald-300 text-emerald-950 shadow-xs ring-1 ring-emerald-300"
+                                                      : isSelected && !isCorrect
+                                                      ? "bg-rose-50/90 border-rose-300 text-rose-950 shadow-xs ring-1 ring-rose-300"
+                                                      : isCorrect
+                                                      ? "bg-emerald-50/40 border-emerald-200 text-slate-800"
+                                                      : "bg-white border-slate-200/80 text-slate-700"
+                                                  }`}
+                                                >
+                                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                    <div
+                                                      className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                                                        isSelected
+                                                          ? isCorrect
+                                                            ? "bg-emerald-600 text-white shadow-xs"
+                                                            : "bg-rose-600 text-white shadow-xs"
+                                                          : isCorrect
+                                                          ? "border-2 border-emerald-500 text-emerald-700 bg-emerald-50 font-bold"
+                                                          : "border border-slate-300 text-slate-500 bg-slate-50"
+                                                      }`}
+                                                    >
+                                                      {String.fromCharCode(65 + ((opt.optionOrder ?? optIdx + 1) - 1))}
+                                                    </div>
+                                                    <div className="text-sm font-medium leading-relaxed">
+                                                      <MathText text={opt.optionText} />
+                                                    </div>
+                                                  </div>
+
+                                                  <div className="flex items-center gap-1.5 shrink-0 ml-3">
+                                                    {isSelected && (
+                                                      <Badge
+                                                        variant="outline"
+                                                        className={`text-[11px] font-semibold px-2 py-0.5 gap-1 ${
+                                                          isCorrect
+                                                            ? "border-emerald-500 text-emerald-700 bg-emerald-100/70"
+                                                            : "border-rose-500 text-rose-700 bg-rose-100/70"
+                                                        }`}
+                                                      >
+                                                        {isCorrect ? (
+                                                          <>
+                                                            <Check className="h-3 w-3 stroke-[3]" /> Your Answer (Correct)
+                                                          </>
+                                                        ) : (
+                                                          <>
+                                                            <X className="h-3 w-3 stroke-[3]" /> Your Answer (Wrong)
+                                                          </>
+                                                        )}
+                                                      </Badge>
+                                                    )}
+                                                    {isCorrect && !isSelected && (
+                                                      <Badge className="bg-emerald-600 text-white text-[11px] font-semibold px-2 py-0.5 gap-1 shadow-xs">
+                                                        <Check className="h-3 w-3 stroke-[3]" /> Correct Key
+                                                      </Badge>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Subjective Response (if no options) */}
+                                      {!hasOptions && item.studentAnswerText && (
+                                        <div className="space-y-1.5 pt-3">
+                                          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
+                                            Your Submitted Response:
+                                          </span>
+                                          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm whitespace-pre-wrap leading-relaxed">
+                                            {item.studentAnswerText}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Instructor Feedback */}
+                                      {item.feedback && (
+                                        <div className="mt-3 text-xs bg-sky-50/70 p-3 rounded-xl border border-sky-200/80 text-sky-900 flex items-start gap-2">
+                                          <span className="font-bold text-sky-800 shrink-0">Instructor Feedback:</span>
+                                          <span>{item.feedback}</span>
+                                        </div>
+                                      )}
                                     </div>
-
-                                    {item.feedback && (
-                                      <div className="mt-2 text-xs bg-white p-2.5 rounded border border-slate-200/60 text-slate-600">
-                                        <span className="font-semibold text-slate-700">Instructor Feedback: </span>
-                                        {item.feedback}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           )}

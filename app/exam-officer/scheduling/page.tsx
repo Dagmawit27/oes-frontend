@@ -73,8 +73,10 @@ function ExamOfficerSchedulingContent() {
   const [selectedExamId, setSelectedExamId] = useState<string>("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [startTime, setStartTime] = useState("09:00");
-  const [closeTime, setCloseTime] = useState("12:00");
-  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [collegeTimezone, setCollegeTimezone] = useState("Africa/Addis_Ababa");
+  const [passcode1, setPasscode1] = useState("1234");
+  const [passcode2, setPasscode2] = useState("5678");
+  const [passcode3, setPasscode3] = useState("9012");
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   const [instructions, setInstructions] = useState("Please arrive 15 minutes before exam start with college ID.");
   const [conflictReport, setConflictReport] = useState<ScheduleConflict | null>(null);
@@ -108,7 +110,6 @@ function ExamOfficerSchedulingContent() {
         setApprovedExams(examRes.data.content);
         if (examRes.data.content.length > 0 && !selectedExamId) {
           setSelectedExamId(String(examRes.data.content[0].id));
-          setDurationMinutes(examRes.data.content[0].durationMinutes || 60);
         }
       }
       if (roomRes.success && roomRes.data) {
@@ -128,14 +129,6 @@ function ExamOfficerSchedulingContent() {
     loadData();
   }, [selectedStatus, selectedOffering, currentWeekStart]);
 
-  // When selected exam changes in create modal, auto-populate duration
-  useEffect(() => {
-    if (!selectedExamId) return;
-    const exam = approvedExams.find((e) => String(e.id) === selectedExamId);
-    if (exam && exam.durationMinutes) {
-      setDurationMinutes(exam.durationMinutes);
-    }
-  }, [selectedExamId, approvedExams]);
 
   // Week days calculation for weekly calendar grid
   const weekDays = useMemo(() => {
@@ -200,14 +193,14 @@ function ExamOfficerSchedulingContent() {
 
   // Run dry-run conflict check
   const handleCheckConflicts = async () => {
-    if (!scheduleDate || !startTime || !closeTime) {
-      toast.error("Please select a date, start time, and close time first");
+    if (!scheduleDate || !startTime) {
+      toast.error("Please select an examination date and start time first");
       return;
     }
     try {
       setCheckingConflict(true);
       const startIso = new Date(`${scheduleDate}T${startTime}:00`).toISOString();
-      const closeIso = new Date(`${scheduleDate}T${closeTime}:00`).toISOString();
+      const closeIso = new Date(`${scheduleDate}T23:59:59`).toISOString();
 
       const res = await scheduleApi.checkConflicts({
         examinationId: selectedExamId ? Number(selectedExamId) : undefined,
@@ -236,24 +229,36 @@ function ExamOfficerSchedulingContent() {
       toast.error("Please select an approved examination");
       return;
     }
-    if (!scheduleDate || !startTime || !closeTime) {
-      toast.error("Please select a date, start time, and close time");
+    if (!scheduleDate || !startTime) {
+      toast.error("Please select an examination date and scheduled start time");
       return;
     }
 
-    const startIso = new Date(`${scheduleDate}T${startTime}:00`).toISOString();
-    const closeIso = new Date(`${scheduleDate}T${closeTime}:00`).toISOString();
-
-    if (new Date(closeIso) <= new Date(startIso)) {
-      toast.error("Scheduled close time must be after start time");
+    if (!/^\d{4}$/.test(passcode1)) {
+      toast.error("Passcode 1 must be exactly 4 numeric digits");
+      return;
+    }
+    if (!/^\d{4}$/.test(passcode2)) {
+      toast.error("Passcode 2 must be exactly 4 numeric digits");
+      return;
+    }
+    if (!/^\d{4}$/.test(passcode3)) {
+      toast.error("Passcode 3 must be exactly 4 numeric digits");
+      return;
+    }
+    if (passcode1 === passcode2 || passcode1 === passcode3 || passcode2 === passcode3) {
+      toast.error("All three passcodes must be distinct");
       return;
     }
 
     const payload: CreateScheduleRequest = {
       examinationId: Number(selectedExamId),
-      scheduledStartAt: startIso,
-      scheduledCloseAt: closeIso,
-      durationMinutes: Number(durationMinutes),
+      examinationDate: scheduleDate,
+      scheduledStartTime: startTime.length === 5 ? startTime + ":00" : startTime,
+      timezone: collegeTimezone,
+      passcode1: passcode1.trim(),
+      passcode2: passcode2.trim(),
+      passcode3: passcode3.trim(),
       roomId: selectedRoomId ? Number(selectedRoomId) : undefined,
       instructions: instructions.trim() || undefined,
       autoGenerateEligibility: true,
@@ -263,7 +268,7 @@ function ExamOfficerSchedulingContent() {
       setIsSubmitting(true);
       const res = await scheduleApi.createSchedule(payload);
       if (res.success) {
-        toast.success("Examination scheduled successfully! Student eligibility generated.");
+        toast.success("Examination scheduled successfully! 3-passcode security sequence activated.");
         setShowCreateModal(false);
         setConflictReport(null);
         loadData();
@@ -785,11 +790,11 @@ function ExamOfficerSchedulingContent() {
                   </select>
                 </div>
 
-                {/* Date & Time Pickers */}
+                {/* Date, Start Time & College Timezone Pickers */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Date <span className="text-rose-500">*</span>
+                      Examination Date <span className="text-rose-500">*</span>
                     </label>
                     <Input
                       type="date"
@@ -800,7 +805,7 @@ function ExamOfficerSchedulingContent() {
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Start Time <span className="text-rose-500">*</span>
+                      Scheduled Start Time <span className="text-rose-500">*</span>
                     </label>
                     <Input
                       type="time"
@@ -811,48 +816,110 @@ function ExamOfficerSchedulingContent() {
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Closing Time <span className="text-rose-500">*</span>
+                      College Timezone <span className="text-rose-500">*</span>
                     </label>
-                    <Input
-                      type="time"
-                      value={closeTime}
-                      onChange={(e) => setCloseTime(e.target.value)}
-                      className="text-xs"
-                    />
+                    <select
+                      value={collegeTimezone}
+                      onChange={(e) => setCollegeTimezone(e.target.value)}
+                      className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    >
+                      <option value="Africa/Addis_Ababa">Africa/Addis_Ababa (EAT, UTC+3)</option>
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                      <option value="America/New_York">America/New_York (EST/EDT)</option>
+                      <option value="Europe/London">Europe/London (GMT/BST)</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Duration & Room */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Exam Duration (Minutes) <span className="text-rose-500">*</span>
-                    </label>
-                    <Input
-                      type="number"
-                      min="5"
-                      max="300"
-                      value={durationMinutes}
-                      onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                      className="text-xs font-bold"
-                    />
+                {/* Duration & Access Window Notice */}
+                <div className="p-3 rounded-lg bg-sky-50/70 border border-sky-100 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sky-900 text-xs flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-sky-600" />
+                      Individual Exam Duration:
+                    </span>
+                    <Badge variant="outline" className="bg-white text-sky-700 font-mono font-bold text-xs">
+                      {approvedExams.find((e) => e.id === Number(selectedExamId))?.durationMinutes || 60} Minutes (Configured by Instructor)
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    <strong>Start Access Policy:</strong> Examination start opens at <strong>{startTime}</strong> and closes at <strong>23:59:59</strong> on the examination date. Each student receives their own full active duration after entering Passcode 1, with independent server timers.
+                  </p>
+                </div>
+
+                {/* Three-Passcode Security Sequence */}
+                <div className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-slate-900 font-bold text-xs">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      Three-Passcode Security Sequence (4 Numeric Digits Each)
+                    </div>
+                    <span className="text-[10px] text-slate-500 uppercase font-mono">Hashed with BCrypt</span>
                   </div>
 
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Physical Examination Room (Optional)</label>
-                    <select
-                      value={selectedRoomId}
-                      onChange={(e) => setSelectedRoomId(e.target.value)}
-                      className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                    >
-                      <option value="">No Room (Online Remote Exam)</option>
-                      {rooms.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} ({r.building || "Campus"} &bull; Cap: {r.capacity})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Passcode 1 (Initial Start) <span className="text-rose-500">*</span>
+                      </label>
+                      <Input
+                        type="password"
+                        maxLength={4}
+                        placeholder="4 digits"
+                        value={passcode1}
+                        onChange={(e) => setPasscode1(e.target.value.replace(/\D/g, ""))}
+                        className="text-xs font-mono tracking-widest text-center"
+                      />
+                      <span className="text-[10px] text-slate-500">For candidate first start</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Passcode 2 (First Resume) <span className="text-rose-500">*</span>
+                      </label>
+                      <Input
+                        type="password"
+                        maxLength={4}
+                        placeholder="4 digits"
+                        value={passcode2}
+                        onChange={(e) => setPasscode2(e.target.value.replace(/\D/g, ""))}
+                        className="text-xs font-mono tracking-widest text-center"
+                      />
+                      <span className="text-[10px] text-slate-500">For 1st interruption recovery</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Passcode 3 (Later Resumes) <span className="text-rose-500">*</span>
+                      </label>
+                      <Input
+                        type="password"
+                        maxLength={4}
+                        placeholder="4 digits"
+                        value={passcode3}
+                        onChange={(e) => setPasscode3(e.target.value.replace(/\D/g, ""))}
+                        className="text-xs font-mono tracking-widest text-center"
+                      />
+                      <span className="text-[10px] text-slate-500">For 2nd+ interruption recoveries</span>
+                    </div>
                   </div>
+                </div>
+
+                {/* Physical Room */}
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Physical Examination Room (Optional)</label>
+                  <select
+                    value={selectedRoomId}
+                    onChange={(e) => setSelectedRoomId(e.target.value)}
+                    className="w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  >
+                    <option value="">No Room (Online Remote Exam)</option>
+                    {rooms.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({r.building || "Campus"} &bull; Cap: {r.capacity})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Instructions */}

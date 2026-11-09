@@ -54,8 +54,11 @@ export interface ExamSchedule {
   instructorName?: string;
   instructorEmail?: string;
 
+  examinationDate?: string;
+  scheduledStartTime?: string;
   scheduledStartAt: string;
   scheduledCloseAt: string;
+  startAccessEndsAt?: string;
   durationMinutes: number;
 
   roomId?: number;
@@ -87,8 +90,12 @@ export interface StudentSchedule {
   section?: string;
   semesterName?: string;
 
+  examinationDate?: string;
+  scheduledStartTime?: string;
   scheduledStartAt: string;
   scheduledCloseAt: string;
+  startAccessEndsAt?: string;
+  timezone?: string;
   durationMinutes: number;
 
   totalMarks: number;
@@ -103,7 +110,21 @@ export interface StudentSchedule {
   instructions?: string;
 
   isAvailableNow: boolean;
-  effectiveDeadline: string;
+  availableNow?: boolean;
+  isStartableNow?: boolean;
+  startableNow?: boolean;
+  isResumableNow?: boolean;
+  resumableNow?: boolean;
+  isStartWindowClosed?: boolean;
+  startWindowClosed?: boolean;
+  isBeforeScheduledStart?: boolean;
+  beforeScheduledStart?: boolean;
+
+  attemptStatus?: string;
+  attemptId?: number;
+  resumeStage?: number;
+  remainingActiveSeconds?: number;
+  effectiveDeadline?: string;
 }
 
 export interface ExamNotification {
@@ -119,18 +140,27 @@ export interface ExamNotification {
 
 export interface CreateScheduleRequest {
   examinationId: number;
-  scheduledStartAt: string;
-  scheduledCloseAt: string;
-  durationMinutes: number;
-  roomId?: number;
+  examinationDate: string;
+  scheduledStartTime: string;
   timezone?: string;
+  passcode1: string;
+  passcode2: string;
+  passcode3: string;
+  roomId?: number;
   instructions?: string;
   autoGenerateEligibility?: boolean;
+
+  // Fallback compatibility
+  scheduledStartAt?: string;
+  scheduledCloseAt?: string;
+  durationMinutes?: number;
 }
 
 export interface RescheduleRequest {
-  scheduledStartAt: string;
-  scheduledCloseAt: string;
+  examinationDate?: string;
+  scheduledStartTime?: string;
+  scheduledStartAt?: string;
+  scheduledCloseAt?: string;
   durationMinutes?: number;
   roomId?: number;
   instructions?: string;

@@ -40,6 +40,8 @@ export interface StudentGradeDetail {
   maximumMarks: number | null;
   feedback: string | null;
   isAutoGraded?: boolean;
+  studentAnswerText?: string | null;
+  options?: QuestionGradingOption[];
 }
 
 export interface StudentExamResult {
