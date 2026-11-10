@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth/AuthContext";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { examApi } from "@/lib/api/exam";
 import { scheduleApi } from "@/lib/api/schedule";
@@ -21,23 +19,64 @@ import {
   Clock,
   Award,
   ArrowRight,
-  ShieldCheck,
   BookOpen,
   UserCheck,
   CheckCircle2,
-  RefreshCw,
-  AlertCircle,
-  Eye,
   Calendar,
-  Users,
+  TrendingUp,
+  Activity,
 } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  XAxis,
+} from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { toast } from "sonner";
 
-export default function ExamOfficerDashboardPage() {
-  const { user } = useAuth();
+const approvalChartConfig = {
+  exams: {
+    label: "Exams",
+    color: "#2563eb",
+  },
+} satisfies ChartConfig;
 
+const scheduleChartConfig = {
+  sittings: {
+    label: "Sittings",
+    color: "#8b5cf6",
+  },
+} satisfies ChartConfig;
+
+const monitoringChartConfig = {
+  candidates: {
+    label: "Candidates",
+    color: "#10b981",
+  },
+} satisfies ChartConfig;
+
+const offeringsChartConfig = {
+  enrolled: {
+    label: "Enrolled",
+    color: "#f59e0b",
+  },
+} satisfies ChartConfig;
+
+export default function ExamOfficerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [pendingExams, setPendingExams] = useState<Examination[]>([]);
+  const [pendingTotalCount, setPendingTotalCount] = useState(0);
+  const [allExams, setAllExams] = useState<Examination[]>([]);
   const [upcomingSchedules, setUpcomingSchedules] = useState<ExamSchedule[]>([]);
   const [activeSessions, setActiveSessions] = useState<ScheduleMonitoringSummary[]>([]);
   const [offerings, setOfferings] = useState<CourseOffering[]>([]);
@@ -46,16 +85,24 @@ export default function ExamOfficerDashboardPage() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [pendingRes, schedRes, monitorRes, offerRes, approvedRes] = await Promise.allSettled([
-        examApi.getExaminations({ status: "SUBMITTED", size: 10 }),
-        scheduleApi.getSchedules({ size: 10 }),
-        monitoringApi.getActiveSchedules(),
-        academicApi.getCourseOfferings(),
-        examApi.getExaminations({ status: "APPROVED", size: 1 }),
-      ]);
+      const [pendingRes, allExamsRes, schedRes, monitorRes, offerRes, approvedRes] =
+        await Promise.allSettled([
+          examApi.getExaminations({ status: "SUBMITTED", size: 10 }),
+          examApi.getExaminations({ size: 100 }),
+          scheduleApi.getSchedules({ size: 50 }),
+          monitoringApi.getActiveSchedules(),
+          academicApi.getCourseOfferings(),
+          examApi.getExaminations({ status: "APPROVED", size: 1 }),
+        ]);
 
       if (pendingRes.status === "fulfilled" && pendingRes.value.success && pendingRes.value.data) {
         setPendingExams(pendingRes.value.data.content);
+        setPendingTotalCount(
+          pendingRes.value.data.totalElements ?? pendingRes.value.data.content.length
+        );
+      }
+      if (allExamsRes.status === "fulfilled" && allExamsRes.value.success && allExamsRes.value.data) {
+        setAllExams(allExamsRes.value.data.content);
       }
       if (schedRes.status === "fulfilled" && schedRes.value.success && schedRes.value.data) {
         setUpcomingSchedules(schedRes.value.data.content);
@@ -81,7 +128,7 @@ export default function ExamOfficerDashboardPage() {
     loadDashboardData();
   }, []);
 
-  const pendingCount = pendingExams.length;
+  const pendingCount = pendingTotalCount || pendingExams.length;
   const scheduledCount = upcomingSchedules.filter(
     (s) => s.status === "SCHEDULED" || s.status === "RESCHEDULED"
   ).length;
@@ -90,131 +137,292 @@ export default function ExamOfficerDashboardPage() {
   ).length;
   const totalOfferingsCount = offerings.length;
 
+  const totalActiveAttempts = activeSessions.reduce(
+    (sum, s) => sum + (s.activeAttempts || 0),
+    0
+  );
+  const totalSubmittedCandidates = activeSessions.reduce(
+    (sum, s) => sum + (s.submittedCount || 0),
+    0
+  );
+  const totalEnrolledStudents = offerings.reduce(
+    (sum, o) => sum + (o.enrolledStudentsCount || 0),
+    0
+  );
+
+  // Live DB Chart 1: Examination Lifecycle Pipeline (Line Chart)
+  const approvalChartData = useMemo(
+    () => [
+      { stage: "Draft", exams: allExams.filter((e) => e.status === "DRAFT").length },
+      { stage: "Submit", exams: allExams.filter((e) => e.status === "SUBMITTED").length },
+      { stage: "Appr", exams: allExams.filter((e) => e.status === "APPROVED").length },
+      {
+        stage: "Sched",
+        exams: allExams.filter((e) => e.status === "SCHEDULED" || e.status === "ONGOING").length,
+      },
+      { stage: "Done", exams: allExams.filter((e) => e.status === "COMPLETED").length },
+    ],
+    [allExams]
+  );
+
+  // Live DB Chart 2: Scheduled Sittings by Course (Bar Chart)
+  const scheduleChartData = useMemo(() => {
+    const courseMap: Record<string, number> = {};
+    offerings.slice(0, 6).forEach((o) => {
+      if (o.courseCode) courseMap[o.courseCode] = 0;
+    });
+    upcomingSchedules.forEach((s) => {
+      const key = s.courseCode || "EXAM";
+      courseMap[key] = (courseMap[key] || 0) + 1;
+    });
+    const entries = Object.entries(courseMap)
+      .slice(0, 6)
+      .map(([course, sittings]) => ({ course, sittings }));
+    return entries.length > 0 ? entries : [{ course: "None", sittings: 0 }];
+  }, [offerings, upcomingSchedules]);
+
+  // Live DB Chart 3: Invigilation / Candidate Throughput (Emerald Area Chart)
+  const monitoringChartData = useMemo(() => {
+    if (activeSessions.length > 0) {
+      return activeSessions.slice(0, 6).map((s) => ({
+        session: s.courseCode || `#${s.scheduleId}`,
+        candidates: s.totalEligible || s.activeAttempts + s.submittedCount,
+      }));
+    }
+    const schedCandidates = upcomingSchedules
+      .filter((s) => s.status === "SCHEDULED" || s.status === "RESCHEDULED")
+      .reduce((sum, s) => sum + (s.eligibleStudentCount || 0), 0);
+    const liveCandidates = upcomingSchedules
+      .filter((s) => s.status === "ONGOING")
+      .reduce((sum, s) => sum + (s.eligibleStudentCount || 0), 0);
+    const doneCandidates = upcomingSchedules
+      .filter((s) => s.status === "COMPLETED")
+      .reduce((sum, s) => sum + (s.eligibleStudentCount || 0), 0);
+    return [
+      { session: "Sched", candidates: schedCandidates },
+      { session: "Live", candidates: liveCandidates },
+      { session: "Done", candidates: doneCandidates },
+    ];
+  }, [activeSessions, upcomingSchedules]);
+
+  // Live DB Chart 4: Course Offerings Enrollment Load (Amber Area Chart)
+  const offeringsChartData = useMemo(() => {
+    const entries = offerings.slice(0, 6).map((o) => ({
+      course: o.courseCode || `#${o.id}`,
+      enrolled: o.enrolledStudentsCount || 0,
+    }));
+    return entries.length > 0 ? entries : [{ course: "N/A", enrolled: 0 }];
+  }, [offerings]);
+
   return (
     <DashboardShell allowedRoles={["ROLE_EXAM_OFFICER", "ROLE_ADMIN"]}>
       <div className="space-y-6 max-w-7xl mx-auto pb-12">
-        {/* Welcome Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
-                Exam Officer Control Center
-              </span>
-              <span className="text-xs text-slate-400">&bull;</span>
-              <span className="text-xs text-slate-500 font-medium">Academic Year 2025/2026</span>
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Welcome back, {user?.firstName} {user?.lastName}
-            </h1>
-            <p className="text-sm text-slate-500">
-              Manage examination blueprints, verify question allocations, schedule exam sittings, and govern candidate results.
-            </p>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadDashboardData}
-              disabled={loading}
-              className="border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5 text-xs"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Link href="/exam-officer/approvals">
-              <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white gap-1.5 text-xs shadow-xs">
-                <ClipboardCheck className="w-4 h-4" />
-                Review Submissions
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Live Metrics Grid */}
+        {/* 4 Stats Cards with Live Database Charts */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* 1. Pending Approvals */}
-          <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Pending Approvals
-              </CardTitle>
-              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200/60">
+          {/* Card 1: Pending Approvals (Royal Blue Line Chart from DB) */}
+          <Card className="flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md transition-shadow bg-white border-slate-200">
+            <CardHeader className="flex flex-row items-start justify-between pb-1 space-y-0">
+              <div>
+                <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Pending Approvals
+                </CardTitle>
+                <div className="text-2xl font-bold text-slate-900 mt-1">
+                  {loading ? "..." : `${pendingCount} Pending`}
+                </div>
+                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <span className="text-emerald-600 font-semibold inline-flex items-center">
+                    <TrendingUp className="w-3 h-3 mr-0.5" /> Live DB
+                  </span>
+                  {totalApprovedExams} approved
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                 <ClipboardCheck className="w-4 h-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-slate-900">
-                {loading ? "..." : pendingCount}
-              </div>
-              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                <span className={pendingCount > 0 ? "text-amber-600 font-semibold" : "text-slate-500"}>
-                  {pendingCount === 1 ? "1 exam" : `${pendingCount} exams`} awaiting review
-                </span>
-              </p>
+            <CardContent className="pt-2 pb-3 px-3">
+              <ChartContainer config={approvalChartConfig} className="h-[90px] w-full aspect-auto">
+                <LineChart
+                  accessibilityLayer
+                  data={approvalChartData}
+                  margin={{ left: 8, right: 8, top: 4, bottom: 0 }}
+                >
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis
+                    dataKey="stage"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={4}
+                    fontSize={10}
+                  />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <Line
+                    dataKey="exams"
+                    type="natural"
+                    stroke="#2563eb"
+                    strokeWidth={2.5}
+                    dot={false}
+                  />
+                </LineChart>
+              </ChartContainer>
             </CardContent>
           </Card>
 
-          {/* 2. Scheduled Exams */}
-          <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Scheduled Exams
-              </CardTitle>
-              <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-200/60">
+          {/* Card 2: Scheduled Exams (Purple Bar Chart from DB) */}
+          <Card className="flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md transition-shadow bg-white border-slate-200">
+            <CardHeader className="flex flex-row items-start justify-between pb-1 space-y-0">
+              <div>
+                <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Scheduled Exams
+                </CardTitle>
+                <div className="text-2xl font-bold text-slate-900 mt-1">
+                  {loading ? "..." : `${scheduledCount} Active`}
+                </div>
+                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <span className="text-purple-600 font-semibold inline-flex items-center">
+                    {upcomingSchedules.length} Sittings
+                  </span>
+                  across timetable
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
                 <CalendarClock className="w-4 h-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-slate-900">
-                {loading ? "..." : scheduledCount}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Active examination sittings
-              </p>
+            <CardContent className="pt-2 pb-3 px-3">
+              <ChartContainer config={scheduleChartConfig} className="h-[90px] w-full aspect-auto">
+                <BarChart
+                  accessibilityLayer
+                  data={scheduleChartData}
+                  margin={{ left: 8, right: 8, top: 4, bottom: 0 }}
+                >
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis
+                    dataKey="course"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={4}
+                    fontSize={10}
+                  />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <Bar dataKey="sittings" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
             </CardContent>
           </Card>
 
-          {/* 3. Active Sessions */}
-          <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Live Active Sessions
-              </CardTitle>
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/60">
+          {/* Card 3: Live Active Sessions (Emerald Area Chart from DB) */}
+          <Card className="flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md transition-shadow bg-white border-slate-200">
+            <CardHeader className="flex flex-row items-start justify-between pb-1 space-y-0">
+              <div>
+                <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Live Active Sessions
+                </CardTitle>
+                <div className="text-2xl font-bold text-slate-900 mt-1 flex items-center gap-2">
+                  {loading ? "..." : `${activeCount} Ongoing`}
+                  {activeCount > 0 && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <span className="text-emerald-600 font-semibold inline-flex items-center">
+                    {totalActiveAttempts} Active
+                  </span>
+                  {totalSubmittedCandidates} submitted
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                 <Clock className="w-4 h-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                {loading ? "..." : activeCount}
-                {activeCount > 0 && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Real-time invigilation running
-              </p>
+            <CardContent className="pt-2 pb-3 px-3">
+              <ChartContainer config={monitoringChartConfig} className="h-[90px] w-full aspect-auto">
+                <AreaChart
+                  accessibilityLayer
+                  data={monitoringChartData}
+                  margin={{ left: 8, right: 8, top: 4, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="officerEmeraldGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis
+                    dataKey="session"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={4}
+                    fontSize={10}
+                  />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <Area
+                    dataKey="candidates"
+                    type="monotone"
+                    stroke="#10b981"
+                    strokeWidth={2.5}
+                    fillOpacity={1}
+                    fill="url(#officerEmeraldGrad)"
+                  />
+                </AreaChart>
+              </ChartContainer>
             </CardContent>
           </Card>
 
-          {/* 4. Course Offerings */}
-          <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Course Offerings
-              </CardTitle>
-              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/60">
+          {/* Card 4: Course Offerings (Amber Area Chart from DB) */}
+          <Card className="flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md transition-shadow bg-white border-slate-200">
+            <CardHeader className="flex flex-row items-start justify-between pb-1 space-y-0">
+              <div>
+                <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Course Offerings
+                </CardTitle>
+                <div className="text-2xl font-bold text-slate-900 mt-1">
+                  {loading ? "..." : `${totalOfferingsCount} Active`}
+                </div>
+                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <span className="text-amber-600 font-semibold inline-flex items-center">
+                    <Activity className="w-3 h-3 mr-0.5" /> {totalEnrolledStudents}
+                  </span>
+                  enrolled candidates
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                 <BookOpen className="w-4 h-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-slate-900">
-                {loading ? "..." : totalOfferingsCount}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {totalApprovedExams} approved blueprints
-              </p>
+            <CardContent className="pt-2 pb-3 px-3">
+              <ChartContainer config={offeringsChartConfig} className="h-[90px] w-full aspect-auto">
+                <AreaChart
+                  accessibilityLayer
+                  data={offeringsChartData}
+                  margin={{ left: 8, right: 8, top: 4, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="officerAmberGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis
+                    dataKey="course"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={4}
+                    fontSize={10}
+                  />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <Area
+                    dataKey="enrolled"
+                    type="monotone"
+                    stroke="#f59e0b"
+                    strokeWidth={2.5}
+                    fillOpacity={1}
+                    fill="url(#officerAmberGrad)"
+                  />
+                </AreaChart>
+              </ChartContainer>
             </CardContent>
           </Card>
         </div>

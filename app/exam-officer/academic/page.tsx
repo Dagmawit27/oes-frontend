@@ -68,46 +68,7 @@ export default function ExamOfficerAcademicPage() {
   return (
     <DashboardShell allowedRoles={["ROLE_EXAM_OFFICER", "ROLE_ADMIN"]}>
       <div className="space-y-6 max-w-7xl mx-auto pb-12">
-        {/* Top Header Card */}
-        <div className="bg-white border border-slate-200/90 p-6 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                <BookOpen className="w-3.5 h-3.5 text-sky-600" />
-                Academic Registries
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
-              Course Offerings & Candidate Rosters
-            </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Inspect active semester offerings, assigned instructors, and enrolled students for exam scheduling.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="relative w-full md:w-72">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search courses or faculty..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchOfferings}
-              disabled={loading}
-              className="border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5 text-xs shrink-0"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
+        
 
         {/* Overview Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

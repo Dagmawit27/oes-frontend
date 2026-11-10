@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { notificationApi } from "@/lib/api/notification";
+import { useAuth } from "@/lib/auth/AuthContext";
 import { useNotifications } from "@/lib/context/NotificationContext";
 import { ExamNotification, NotificationType } from "@/types/notification";
 import {
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 
 export default function StudentNotificationsPage() {
+  const { isAuthenticated, user } = useAuth();
   const { connectionStatus, markAsRead, markAllAsRead } = useNotifications();
   const [notifications, setNotifications] = useState<ExamNotification[]>([]);
   const [filter, setFilter] = useState<"ALL" | "UNREAD">("ALL");
@@ -32,10 +34,16 @@ export default function StudentNotificationsPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const hasAutoMarkedOnOpenRef = useRef(false);
 
   const fetchNotifications = useCallback(async () => {
+    if (!isAuthenticated || !user) return;
     setLoading(true);
     try {
+      if (!hasAutoMarkedOnOpenRef.current) {
+        hasAutoMarkedOnOpenRef.current = true;
+        await markAllAsRead({ silent: true });
+      }
       const res = await notificationApi.getMyNotifications(
         filter === "UNREAD",
         page,
@@ -49,7 +57,7 @@ export default function StudentNotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, page]);
+  }, [filter, page, isAuthenticated, user, markAllAsRead]);
 
   useEffect(() => {
     fetchNotifications();
@@ -160,9 +168,6 @@ export default function StudentNotificationsPage() {
                   </span>
                 </div>
               </div>
-              <p className="text-sm text-slate-500 mt-1">
-                Real-time alerts, examination schedules, submission confirmations, and announcements
-              </p>
             </div>
 
             {/* Actions */}

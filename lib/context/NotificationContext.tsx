@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useRef,
 } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { stompManager, WebSocketConnectionStatus } from "@/lib/websocket/stompClient";
@@ -18,7 +19,7 @@ interface NotificationContextType {
   unreadCount: number;
   connectionStatus: WebSocketConnectionStatus;
   markAsRead: (id: number) => Promise<void>;
-  markAllAsRead: () => Promise<void>;
+  markAllAsRead: (options?: { silent?: boolean }) => Promise<void>;
   refreshNotifications: () => Promise<void>;
 }
 
@@ -36,14 +37,18 @@ export function NotificationProvider({
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [connectionStatus, setConnectionStatus] =
     useState<WebSocketConnectionStatus>("DISCONNECTED");
+  const mutationVersionRef = useRef(0);
 
   const refreshNotifications = useCallback(async () => {
     if (!user) return;
+    const versionAtStart = mutationVersionRef.current;
     try {
       const [countRes, recentRes] = await Promise.all([
         notificationApi.getUnreadCount(),
         notificationApi.getRecentNotifications(),
       ]);
+      // Avoid overwriting newer read-state mutations that started while refreshing
+      if (mutationVersionRef.current !== versionAtStart) return;
       setUnreadCount(countRes.data.unreadCount);
       setNotifications(recentRes.data);
     } catch (err) {
@@ -124,7 +129,8 @@ export function NotificationProvider({
     };
   }, [user, isAuthenticated, refreshNotifications]);
 
-  const markAsRead = async (id: number) => {
+  const markAsRead = useCallback(async (id: number) => {
+    mutationVersionRef.current += 1;
     try {
       await notificationApi.markAsRead(id);
       setNotifications((prev) =>
@@ -134,18 +140,21 @@ export function NotificationProvider({
     } catch (err) {
       console.error("Failed to mark notification as read:", err);
     }
-  };
+  }, []);
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async (options?: { silent?: boolean }) => {
+    mutationVersionRef.current += 1;
     try {
       await notificationApi.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(0);
-      toast.success("All notifications marked as read");
+      if (!options?.silent) {
+        toast.success("All notifications marked as read");
+      }
     } catch (err) {
       console.error("Failed to mark all notifications as read:", err);
     }
-  };
+  }, []);
 
   return (
     <NotificationContext.Provider

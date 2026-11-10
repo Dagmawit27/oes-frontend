@@ -29,8 +29,6 @@ import {
   Filter,
   CheckCircle2,
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   CalendarClock,
   Layers,
@@ -40,27 +38,37 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  InteractiveExamCalendar,
+  CalendarFilterState,
+  toLocalDateKey,
+  matchesCalendarFilter,
+  formatCalendarFilterLabel,
+} from "@/components/schedule/InteractiveExamCalendar";
 
 function ExamOfficerSchedulingContent() {
-  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [schedules, setSchedules] = useState<ExamSchedule[]>([]);
   const [approvedExams, setApprovedExams] = useState<Examination[]>([]);
   const [rooms, setRooms] = useState<ExamRoom[]>([]);
   const [offerings, setOfferings] = useState<CourseOffering[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Calendar week navigation (starts from current week)
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(
-    () => new Date("2026-03-09T00:00:00Z")
-  );
+  // Calendar filter state: defaults to Current Day (today) on mount
+  const [todayKey, setTodayKey] = useState<string>("2026-11-10");
+  const [dateFilter, setDateFilter] = useState<CalendarFilterState>({
+    mode: "single",
+    startDateKey: "2026-11-10",
+    endDateKey: null,
+  });
 
   useEffect(() => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
-    const monday = new Date(d.setDate(diff));
-    monday.setHours(0, 0, 0, 0);
-    setCurrentWeekStart(monday);
+    const nowKey = toLocalDateKey(new Date());
+    setTodayKey(nowKey);
+    setDateFilter({
+      mode: "single",
+      startDateKey: nowKey,
+      endDateKey: null,
+    });
   }, []);
 
   // Filters for list view
@@ -87,10 +95,6 @@ function ExamOfficerSchedulingContent() {
   const loadData = async () => {
     try {
       setLoading(true);
-
-      // Calendar window
-      const weekEnd = new Date(currentWeekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
 
       const [schedRes, examRes, roomRes, offRes] = await Promise.all([
         scheduleApi.getSchedules({
@@ -127,69 +131,8 @@ function ExamOfficerSchedulingContent() {
 
   useEffect(() => {
     loadData();
-  }, [selectedStatus, selectedOffering, currentWeekStart]);
+  }, [selectedStatus, selectedOffering]);
 
-
-  // Week days calculation for weekly calendar grid
-  const weekDays = useMemo(() => {
-    const days: { date: Date; name: string; dayNum: number; isToday: boolean }[] = [];
-    const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(currentWeekStart);
-      d.setDate(d.getDate() + i);
-      const isToday =
-        d.getDate() === today.getDate() &&
-        d.getMonth() === today.getMonth() &&
-        d.getFullYear() === today.getFullYear();
-      const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      days.push({
-        date: d,
-        name: names[d.getDay()],
-        dayNum: d.getDate(),
-        isToday,
-      });
-    }
-    return days;
-  }, [currentWeekStart]);
-
-  // Format week range text (e.g. "March 13 - 19, 2026")
-  const weekRangeText = useMemo(() => {
-    const startMonth = currentWeekStart.toLocaleDateString("en-US", { month: "short" });
-    const endDay = new Date(currentWeekStart);
-    endDay.setDate(endDay.getDate() + 6);
-    const endMonth = endDay.toLocaleDateString("en-US", { month: "short" });
-    const year = currentWeekStart.getFullYear();
-
-    if (startMonth === endMonth) {
-      return `${startMonth} ${currentWeekStart.getDate()} - ${endDay.getDate()}, ${year}`;
-    }
-    return `${startMonth} ${currentWeekStart.getDate()} - ${endMonth} ${endDay.getDate()}, ${year}`;
-  }, [currentWeekStart]);
-
-  const handlePrevWeek = () => {
-    setCurrentWeekStart((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() - 7);
-      return d;
-    });
-  };
-
-  const handleNextWeek = () => {
-    setCurrentWeekStart((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + 7);
-      return d;
-    });
-  };
-
-  const handleTodayWeek = () => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d.setDate(diff));
-    monday.setHours(0, 0, 0, 0);
-    setCurrentWeekStart(monday);
-  };
 
   // Run dry-run conflict check
   const handleCheckConflicts = async () => {
@@ -297,14 +240,36 @@ function ExamOfficerSchedulingContent() {
     }
   };
 
-  // Pastel colors palette for calendar exam cards
-  const cardColorStyles = [
-    { bg: "bg-sky-50/80 border-sky-200 text-sky-900", badge: "bg-sky-100 text-sky-800" },
-    { bg: "bg-emerald-50/80 border-emerald-200 text-emerald-900", badge: "bg-emerald-100 text-emerald-800" },
-    { bg: "bg-amber-50/80 border-amber-200 text-amber-900", badge: "bg-amber-100 text-amber-800" },
-    { bg: "bg-purple-50/80 border-purple-200 text-purple-900", badge: "bg-purple-100 text-purple-800" },
-    { bg: "bg-rose-50/80 border-rose-200 text-rose-900", badge: "bg-rose-100 text-rose-800" },
-  ];
+  // Non-date filtered schedules (search applied)
+  const nonDateFilteredSchedules = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return schedules;
+    return schedules.filter(
+      (s) =>
+        (s.examinationTitle && s.examinationTitle.toLowerCase().includes(q)) ||
+        (s.courseCode && s.courseCode.toLowerCase().includes(q)) ||
+        (s.courseName && s.courseName.toLowerCase().includes(q))
+    );
+  }, [schedules, search]);
+
+  // All local YYYY-MM-DD keys that contain at least one scheduled exam
+  const examDateKeys = useMemo(() => {
+    const set = new Set<string>();
+    nonDateFilteredSchedules.forEach((s) => {
+      const key = toLocalDateKey(s.scheduledStartAt);
+      if (key) set.add(key);
+    });
+    return set;
+  }, [nonDateFilteredSchedules]);
+
+  // Final displayed schedules filtered by selected day or date range in the calendar
+  const displayedSchedules = useMemo(() => {
+    return nonDateFilteredSchedules
+      .filter((s) => matchesCalendarFilter(s.scheduledStartAt, dateFilter))
+      .sort((a, b) => new Date(a.scheduledStartAt).getTime() - new Date(b.scheduledStartAt).getTime());
+  }, [nonDateFilteredSchedules, dateFilter]);
+
+  const activeDateLabel = useMemo(() => formatCalendarFilterLabel(dateFilter), [dateFilter]);
 
   return (
     <DashboardShell>
@@ -317,38 +282,18 @@ function ExamOfficerSchedulingContent() {
               Examination Scheduling & Timetable
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Coordinate examination timetables, reserve physical rooms, detect student conflicts, and manage student eligibility.
+              Coordinate examination schedules, reserve physical rooms, detect student conflicts, and manage student eligibility.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="bg-slate-100 p-1 rounded-lg flex items-center text-xs font-semibold">
-              <button
-                onClick={() => setViewMode("calendar")}
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  viewMode === "calendar"
-                    ? "bg-white text-sky-700 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Calendar View
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`px-3 py-1.5 rounded-md transition-all ${
-                  viewMode === "list"
-                    ? "bg-white text-sky-700 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                List View
-              </button>
-            </div>
-
             <Button
               onClick={() => {
-                const today = new Date().toISOString().split("T")[0];
-                setScheduleDate(today);
+                const defaultDate =
+                  dateFilter.mode === "single" && dateFilter.startDateKey
+                    ? dateFilter.startDateKey
+                    : todayKey;
+                setScheduleDate(defaultDate);
                 setShowCreateModal(true);
               }}
               className="bg-sky-600 hover:bg-sky-700 text-white gap-2 text-xs font-medium"
@@ -359,275 +304,51 @@ function ExamOfficerSchedulingContent() {
           </div>
         </div>
 
-        {/* CALENDAR VIEW (Inspired by user's design) */}
-        {viewMode === "calendar" && (
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-            {/* Main Weekly Timetable Grid */}
-            <div className="xl:col-span-3 space-y-4">
-              {/* Calendar Navigator Bar */}
-              <div className="flex items-center justify-between bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-slate-800">{weekRangeText}</h2>
-                  <div className="flex items-center gap-1 ml-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handlePrevWeek}
-                      className="h-7 w-7 p-0"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleNextWeek}
-                      className="h-7 w-7 p-0"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleTodayWeek}
-                    className="text-xs h-7 text-slate-600"
-                  >
-                    Today
-                  </Button>
-                  <span className="text-xs text-slate-400 font-medium px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
-                    Week View
-                  </span>
-                </div>
-              </div>
-
-              {/* Weekly Time Grid */}
-              <Card className="border border-slate-200 shadow-xs bg-white overflow-hidden">
-                <div className="overflow-x-auto">
-                  <div className="min-w-[750px]">
-                    {/* Days Header */}
-                    <div className="grid grid-cols-8 border-b border-slate-200 bg-slate-50/70 text-center text-xs">
-                      <div className="p-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-r border-slate-200">
-                        Time
-                      </div>
-                      {weekDays.map((d, i) => (
-                        <div
-                          key={i}
-                          className={`p-2.5 border-r border-slate-200 last:border-r-0 ${
-                            d.isToday ? "bg-sky-50/60 font-bold text-sky-700" : "text-slate-700"
-                          }`}
-                        >
-                          <div className="text-[11px] font-medium text-slate-500 uppercase">{d.name}</div>
-                          <div
-                            className={`text-sm font-bold mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-full ${
-                              d.isToday ? "bg-sky-600 text-white shadow-xs" : ""
-                            }`}
-                          >
-                            {d.dayNum}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Time Slots Rows (09:00 to 18:00) */}
-                    <div className="divide-y divide-slate-100 text-xs">
-                      {[
-                        "09:00 am",
-                        "10:00 am",
-                        "11:00 am",
-                        "12:00 pm",
-                        "01:00 pm",
-                        "02:00 pm",
-                        "03:00 pm",
-                        "04:00 pm",
-                        "05:00 pm",
-                      ].map((slotTime, slotIdx) => {
-                        const slotHour = 9 + slotIdx; // 9 to 17
-
-                        return (
-                          <div key={slotTime} className="grid grid-cols-8 min-h-[72px]">
-                            {/* Time Column */}
-                            <div className="p-2.5 text-[11px] font-medium text-slate-400 border-r border-slate-200 bg-slate-50/30 flex items-center justify-center">
-                              {slotTime}
-                            </div>
-
-                            {/* 7 Days Columns */}
-                            {weekDays.map((dayItem, dayIdx) => {
-                              // Find schedules matching this day and starting near this hour
-                              const matchedSchedules = schedules.filter((s) => {
-                                const sDate = new Date(s.scheduledStartAt);
-                                const isSameDay =
-                                  sDate.getDate() === dayItem.date.getDate() &&
-                                  sDate.getMonth() === dayItem.date.getMonth() &&
-                                  sDate.getFullYear() === dayItem.date.getFullYear();
-                                const sHour = sDate.getHours();
-                                return isSameDay && sHour === slotHour;
-                              });
-
-                              return (
-                                <div
-                                  key={dayIdx}
-                                  className={`p-1.5 border-r border-slate-100 last:border-r-0 relative group transition-colors ${
-                                    dayItem.isToday ? "bg-sky-50/15" : "hover:bg-slate-50/50"
-                                  }`}
-                                >
-                                  {matchedSchedules.map((s, idx) => {
-                                    const style = cardColorStyles[(s.id + idx) % cardColorStyles.length];
-                                    const startTimeStr = new Date(s.scheduledStartAt).toLocaleTimeString([], {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    });
-                                    const closeTimeStr = new Date(s.scheduledCloseAt).toLocaleTimeString([], {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    });
-
-                                    return (
-                                      <Link
-                                        key={s.id}
-                                        href={`/exam-officer/scheduling/${s.id}`}
-                                        className={`block p-2 rounded-lg border shadow-2xs transition-transform hover:-translate-y-0.5 ${style.bg} mb-1`}
-                                      >
-                                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                                          <span className="font-bold text-[10px] tracking-tight truncate">
-                                            {s.courseCode || "EXAM"}
-                                          </span>
-                                          <span className={`text-[9px] px-1 py-0.2 rounded font-semibold ${style.badge}`}>
-                                            {s.durationMinutes}m
-                                          </span>
-                                        </div>
-                                        <div className="font-semibold text-[11px] leading-tight line-clamp-1">
-                                          {s.examinationTitle}
-                                        </div>
-                                        <div className="flex items-center justify-between text-[10px] opacity-75 mt-1">
-                                          <span>{startTimeStr} - {closeTimeStr}</span>
-                                          {s.roomName && (
-                                            <span className="truncate max-w-[60px] font-medium">{s.roomName}</span>
-                                          )}
-                                        </div>
-                                      </Link>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* Right Side Column (Mini Month Calendar & Termtest Upcoming list) */}
-            <div className="space-y-4">
-              {/* Mini Month Widget */}
-              <Card className="border border-slate-200 shadow-xs bg-white">
-                <CardHeader className="p-4 pb-2 border-b border-slate-100">
-                  <CardTitle className="text-sm font-bold text-slate-800">
-                    {currentWeekStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-3">
-                  <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-400 mb-2">
-                    <span>Mo</span>
-                    <span>Tu</span>
-                    <span>We</span>
-                    <span>Th</span>
-                    <span>Fr</span>
-                    <span>Sa</span>
-                    <span>Su</span>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 text-center text-xs">
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((dNum) => {
-                      const hasExam = schedules.some((s) => {
-                        const d = new Date(s.scheduledStartAt);
-                        return d.getDate() === dNum;
-                      });
-                      const isSelected = weekDays.some((wd) => wd.dayNum === dNum);
-
-                      return (
-                        <div
-                          key={dNum}
-                          className={`h-7 w-7 mx-auto rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
-                            isSelected
-                              ? "bg-sky-600 text-white font-bold"
-                              : hasExam
-                              ? "bg-emerald-100 text-emerald-800 font-bold"
-                              : "text-slate-600 hover:bg-slate-100"
-                          }`}
-                        >
-                          {dNum}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Upcoming Examination Schedule List */}
-              <Card className="border border-slate-200 shadow-xs bg-white">
-                <CardHeader className="p-4 border-b border-slate-100 bg-slate-50/50">
-                  <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-sky-600" />
-                    Upcoming Termtests ({schedules.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-3 space-y-2.5">
-                  {schedules.slice(0, 5).map((s) => (
-                    <Link
-                      key={s.id}
-                      href={`/exam-officer/scheduling/${s.id}`}
-                      className="block p-3 rounded-lg border border-slate-200 hover:border-sky-300 hover:bg-sky-50/30 transition-all text-xs"
-                    >
-                      <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
-                        <span className="font-semibold text-slate-700">
-                          {new Date(s.scheduledStartAt).toLocaleDateString([], {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </span>
-                        <span>{s.durationMinutes} mins</span>
-                      </div>
-                      <div className="font-bold text-slate-900 line-clamp-1">{s.examinationTitle}</div>
-                      <div className="flex items-center justify-between text-slate-500 mt-1">
-                        <span>{s.courseCode} &bull; Sec {s.section || "A"}</span>
-                        <span className="text-[11px] font-semibold text-sky-600">
-                          {new Date(s.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
-                  {schedules.length === 0 && (
-                    <p className="text-center text-xs text-slate-400 py-4">No upcoming examinations.</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        {/* LIST VIEW */}
-        {viewMode === "list" && (
-          <div className="space-y-4">
-            {/* Filter Bar */}
+        {/* 2-Column Layout: Left = Scheduled Exams List, Right = Search + Month Calendar */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
+          {/* LEFT COLUMN (Main): Scheduled Exams List (replaced hourly timeline table) */}
+          <div className="xl:col-span-3 space-y-4">
+            {/* Filter Status & Dropdown Bar */}
             <Card className="border border-slate-200 shadow-xs bg-white">
-              <CardContent className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                      placeholder="Search examinations or course..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-9 bg-slate-50 border-slate-200 text-xs"
-                    />
+              <CardContent className="p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-800">{activeDateLabel}</span>
+                    <Badge variant="outline" className="text-[11px] font-semibold bg-slate-50 text-slate-700">
+                      {displayedSchedules.length} {displayedSchedules.length === 1 ? "Exam" : "Exams"}
+                    </Badge>
                   </div>
 
+                  <div className="flex items-center gap-1.5">
+                    {!(dateFilter.mode === "single" && dateFilter.startDateKey === todayKey) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setDateFilter({ mode: "single", startDateKey: todayKey, endDateKey: null })
+                        }
+                        className="h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                      >
+                        Today
+                      </Button>
+                    )}
+                    {dateFilter.mode !== "all" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setDateFilter((prev) => ({ ...prev, mode: "all" }))
+                        }
+                        className="h-7 text-xs text-slate-600"
+                      >
+                        Show All ({nonDateFilteredSchedules.length})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <select
                       value={selectedStatus}
@@ -661,98 +382,168 @@ function ExamOfficerSchedulingContent() {
               </CardContent>
             </Card>
 
-            {/* Schedules Table */}
-            <Card className="border border-slate-200 shadow-xs bg-white overflow-hidden">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                        <th className="py-3 px-4">Examination</th>
-                        <th className="py-3 px-4">Course & Section</th>
-                        <th className="py-3 px-4">Scheduled Window</th>
-                        <th className="py-3 px-4">Duration & Room</th>
-                        <th className="py-3 px-4">Eligible Students</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs">
-                      {schedules.map((s) => (
-                        <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="py-3.5 px-4 max-w-xs">
-                            <Link
-                              href={`/exam-officer/scheduling/${s.id}`}
-                              className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-1"
-                            >
-                              {s.examinationTitle}
-                            </Link>
-                            <span className="text-[11px] text-slate-500 block">
-                              Total: {s.totalMarks} Marks (Pass: {s.passingMarks})
-                            </span>
-                          </td>
-
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="font-medium text-slate-800">
-                              {s.courseCode} - {s.courseName}
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              Sec {s.section || "A"} &bull; {s.semesterName || "Fall 2025"}
-                            </div>
-                          </td>
-
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="font-semibold text-slate-800">
-                              {new Date(s.scheduledStartAt).toLocaleDateString([], {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                            </div>
-                            <div className="text-[11px] text-slate-500">
-                              {new Date(s.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              {" - "}
-                              {new Date(s.scheduledCloseAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </div>
-                          </td>
-
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 font-medium text-slate-700">
-                              <Clock className="h-3.5 w-3.5 text-slate-400" />
-                              {s.durationMinutes} mins
-                            </div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                              <MapPin className="h-3 w-3 text-slate-400" />
-                              {s.roomName || "Online Exam"}
-                            </div>
-                          </td>
-
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                              <Users className="h-3.5 w-3.5 text-sky-600" />
-                              {s.eligibleStudentCount} Students
-                            </div>
-                          </td>
-
-                          <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(s.status)}</td>
-
-                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                            <Link href={`/exam-officer/scheduling/${s.id}`}>
-                              <Button variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600">
-                                <Eye className="h-3.5 w-3.5" />
-                                Manage
-                              </Button>
-                            </Link>
-                          </td>
+            {/* Scheduled Exams List Table / Empty State */}
+            {loading ? (
+              <Card className="border border-slate-200 shadow-xs bg-white">
+                <CardContent className="p-12 text-center text-xs text-slate-500">
+                  Loading scheduled examinations...
+                </CardContent>
+              </Card>
+            ) : displayedSchedules.length === 0 ? (
+              <Card className="border border-dashed border-slate-300 shadow-2xs bg-white">
+                <CardContent className="p-12 text-center space-y-3">
+                  <CalendarClock className="w-10 h-10 text-slate-300 mx-auto" />
+                  <h3 className="text-sm font-bold text-slate-800">
+                    No Examinations Scheduled for {activeDateLabel}
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Select a dotted day in the calendar, switch to Range mode (e.g., Day 5 – Day 10), or view all scheduled examinations.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    {dateFilter.mode !== "all" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDateFilter((prev) => ({ ...prev, mode: "all" }))}
+                        className="text-xs"
+                      >
+                        Show All Scheduled Exams ({nonDateFilteredSchedules.length})
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const defaultDate =
+                          dateFilter.mode === "single" && dateFilter.startDateKey
+                            ? dateFilter.startDateKey
+                            : todayKey;
+                        setScheduleDate(defaultDate);
+                        setShowCreateModal(true);
+                      }}
+                      className="bg-sky-600 hover:bg-sky-700 text-white text-xs gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Schedule Exam
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border border-slate-200 shadow-xs bg-white overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          <th className="py-3 px-4">Examination</th>
+                          <th className="py-3 px-4">Course & Section</th>
+                          <th className="py-3 px-4">Scheduled Window</th>
+                          <th className="py-3 px-4">Duration & Room</th>
+                          <th className="py-3 px-4">Eligible Students</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {displayedSchedules.map((s) => (
+                          <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3.5 px-4 max-w-xs">
+                              <Link
+                                href={`/exam-officer/scheduling/${s.id}`}
+                                className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-1"
+                              >
+                                {s.examinationTitle}
+                              </Link>
+                              <span className="text-[11px] text-slate-500 block">
+                                Total: {s.totalMarks} Marks (Pass: {s.passingMarks})
+                              </span>
+                            </td>
+
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="font-medium text-slate-800">
+                                {s.courseCode} - {s.courseName}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                Sec {s.section || "A"} &bull; {s.semesterName || "Fall 2025"}
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="font-semibold text-slate-800">
+                                {new Date(s.scheduledStartAt).toLocaleDateString([], {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {new Date(s.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                {" - "}
+                                {new Date(s.scheduledCloseAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                                <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                {s.durationMinutes} mins
+                              </div>
+                              <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                                <MapPin className="h-3 w-3 text-slate-400" />
+                                {s.roomName || "Online Exam"}
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                                <Users className="h-3.5 w-3.5 text-sky-600" />
+                                {s.eligibleStudentCount} Students
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(s.status)}</td>
+
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              <Link href={`/exam-officer/scheduling/${s.id}`}>
+                                <Button variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600">
+                                  <Eye className="h-3.5 w-3.5" />
+                                  Manage
+                                </Button>
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
-        )}
+
+          {/* RIGHT COLUMN (Sidebar): Search Input + Month Calendar (kept in same place!) */}
+          <div className="xl:col-span-1 space-y-4">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                type="text"
+                placeholder="Search course or exam..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 h-11 rounded-2xl border-slate-200 bg-white shadow-2xs text-xs"
+              />
+            </div>
+
+            {/* Interactive Calendar Widget */}
+            <InteractiveExamCalendar
+              examDateKeys={examDateKeys}
+              filter={dateFilter}
+              onFilterChange={setDateFilter}
+              todayKey={todayKey}
+            />
+          </div>
+        </div>
 
         {/* Create Schedule Modal with Conflict Analysis */}
         {showCreateModal && (

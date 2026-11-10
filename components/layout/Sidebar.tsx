@@ -71,14 +71,10 @@ export function Sidebar() {
   ];
 
   const studentNav: NavItem[] = [
-    { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
-    { label: "Academic Profile", href: "/student/profile", icon: GraduationCap },
     { label: "My Courses", href: "/student/courses", icon: BookOpen },
     { label: "Available Exams", href: "/student/examinations", icon: FileSpreadsheet },
     { label: "Exam Schedule", href: "/student/schedule", icon: CalendarClock },
-    { label: "Exam History", href: "/student/history", icon: Clock },
-    { label: "My Results", href: "/student/results", icon: Award },
-    { label: "Notifications", href: "/student/notifications", icon: Bell },
+    { label: "Academic Profile", href: "/student/profile", icon: GraduationCap },
   ];
 
   let currentNav: NavItem[] = [];

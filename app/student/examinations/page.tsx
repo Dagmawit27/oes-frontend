@@ -296,47 +296,7 @@ function StudentExaminationsContent() {
   return (
     <DashboardShell allowedRoles={["ROLE_STUDENT", "ROLE_ADMIN"]}>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                Student Examination Portal
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
-              My Academic Examinations
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Access available exam sessions, inspect official guidelines, and monitor your scheduled testing windows.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowNotificationModal(true)}
-              className="relative gap-2 border-slate-200 bg-white"
-            >
-              <Bell className="w-4 h-4 text-slate-600" />
-              <span>Notifications</span>
-              {unreadNotificationsCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-bold">
-                  {unreadNotificationsCount}
-                </span>
-              )}
-            </Button>
-
-            <Link href="/student/schedule">
-              <Button size="sm" variant="outline" className="gap-2 border-slate-200 bg-white">
-                <Calendar className="w-4 h-4 text-slate-600" />
-                <span>Timetable Grid</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-
+        
         {/* Search & Tabs */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs">
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
@@ -447,10 +407,6 @@ function StudentExaminationsContent() {
                 <h3 className="text-base font-bold text-slate-800">
                   No Examinations Active Right Now
                 </h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  You do not have any open examination windows at this exact moment. Please check your
-                  upcoming timetable to prepare for future sessions.
-                </p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -661,9 +617,7 @@ function StudentExaminationsContent() {
               <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center space-y-3">
                 <Calendar className="w-10 h-10 text-slate-300 mx-auto" />
                 <h3 className="text-base font-bold text-slate-800">No Upcoming Examinations</h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  You have no pending examinations scheduled on your calendar at this time.
-                </p>
+                
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -816,7 +770,7 @@ function StudentExaminationsContent() {
                         </td>
                         <td className="py-3.5 px-4 text-right text-xs">
                           {exam.attemptStatus === "SUBMITTED" || exam.attemptStatus === "AUTO_SUBMITTED" ? (
-                            <Link href="/student/results">
+                            <Link href="/student/courses">
                               <Button
                                 size="sm"
                                 variant="outline"
