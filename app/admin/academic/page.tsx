@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { academicApi } from "@/lib/api/academic";
@@ -13,6 +13,7 @@ import {
   Semester,
   Course,
   CourseOffering,
+  Enrollment,
   Student,
   Instructor,
   BulkImportResult,
@@ -36,6 +37,10 @@ import {
   Download,
   Search,
   Filter,
+  Eye,
+  Edit2,
+  Power,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,7 +65,19 @@ export default function AdminAcademicHubPage() {
   const [showYearModal, setShowYearModal] = useState(false);
   const [showSemesterModal, setShowSemesterModal] = useState(false);
   const [showOfferingModal, setShowOfferingModal] = useState(false);
+  const [editingOffering, setEditingOffering] = useState<CourseOffering | null>(null);
+  const [viewingOffering, setViewingOffering] = useState<CourseOffering | null>(null);
+  const [rosterOffering, setRosterOffering] = useState<CourseOffering | null>(null);
+  const [rosterStudents, setRosterStudents] = useState<Enrollment[]>([]);
+  const [loadingRoster, setLoadingRoster] = useState(false);
   const [showInstructorModal, setShowInstructorModal] = useState(false);
+
+  // Course Assignment Search & Filters
+  const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [filterProgramId, setFilterProgramId] = useState<string>("");
+  const [filterYearId, setFilterYearId] = useState<string>("");
+  const [filterSemesterId, setFilterSemesterId] = useState<string>("");
+  const [filterInstructorId, setFilterInstructorId] = useState<string>("");
 
   // Forms
   const [programForm, setProgramForm] = useState({
@@ -94,12 +111,26 @@ export default function AdminAcademicHubPage() {
     isCurrent: false,
   });
 
-  const [offeringForm, setOfferingForm] = useState({
+  const [offeringForm, setOfferingForm] = useState<{
+    courseId: number;
+    programId: string;
+    academicYearId: string;
+    semesterId: number;
+    studentYearLevel: string;
+    instructorId: number;
+    section: string;
+    maxStudents: number;
+    isActive: boolean;
+  }>({
     courseId: 0,
+    programId: "",
+    academicYearId: "",
     semesterId: 0,
+    studentYearLevel: "1",
     instructorId: 0,
     section: "A",
     maxStudents: 50,
+    isActive: true,
   });
 
   // Bulk CSV Import State
@@ -161,10 +192,20 @@ export default function AdminAcademicHubPage() {
         setSemesterForm((prev) => ({ ...prev, academicYearId: yearRes.data[0].id }));
       }
       if (courseRes.data.length > 0 && semRes.data.length > 0 && instructorRes.data.length > 0) {
+        const defaultSem = semRes.data[0];
         setOfferingForm((prev) => ({
           ...prev,
           courseId: prev.courseId || courseRes.data[0].id,
-          semesterId: prev.semesterId || semRes.data[0].id,
+          academicYearId:
+            prev.academicYearId ||
+            (defaultSem.academicYearId ? String(defaultSem.academicYearId) : ""),
+          semesterId: prev.semesterId || defaultSem.id,
+          programId:
+            prev.programId !== ""
+              ? prev.programId
+              : progRes.data.length > 0
+                ? String(progRes.data[0].id)
+                : "",
           instructorId: prev.instructorId || instructorRes.data[0].id,
         }));
       }
@@ -219,18 +260,169 @@ export default function AdminAcademicHubPage() {
     }
   };
 
+  const openCreateAssignmentModal = () => {
+    const defaultYearId = academicYears.length > 0 ? String(academicYears[0].id) : "";
+    const matchingSemester =
+      semesters.find((s) => !defaultYearId || String(s.academicYearId) === defaultYearId) ||
+      semesters[0];
+
+    setEditingOffering(null);
+    setOfferingForm({
+      courseId: courses.length > 0 ? courses[0].id : 0,
+      programId: programs.length > 0 ? String(programs[0].id) : "",
+      academicYearId: matchingSemester?.academicYearId
+        ? String(matchingSemester.academicYearId)
+        : defaultYearId,
+      semesterId: matchingSemester ? matchingSemester.id : 0,
+      studentYearLevel: "1",
+      instructorId: instructors.length > 0 ? instructors[0].id : 0,
+      section: "A",
+      maxStudents: 50,
+      isActive: true,
+    });
+    setShowOfferingModal(true);
+  };
+
+  const openEditAssignmentModal = (assignment: CourseOffering) => {
+    const semObj = semesters.find((s) => s.id === assignment.semesterId);
+    const yearId =
+      assignment.academicYearId ?? semObj?.academicYearId ?? (academicYears[0]?.id || "");
+
+    setEditingOffering(assignment);
+    setOfferingForm({
+      courseId: assignment.courseId,
+      programId: assignment.programId ? String(assignment.programId) : "",
+      academicYearId: yearId ? String(yearId) : "",
+      semesterId: assignment.semesterId,
+      studentYearLevel: assignment.studentYearLevel ? String(assignment.studentYearLevel) : "",
+      instructorId: assignment.instructorId,
+      section: assignment.section,
+      maxStudents: assignment.maxStudents || 50,
+      isActive: assignment.isActive,
+    });
+    setShowOfferingModal(true);
+  };
+
   const handleCreateOffering = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload: Partial<CourseOffering> = {
+      courseId: offeringForm.courseId,
+      semesterId: offeringForm.semesterId,
+      instructorId: offeringForm.instructorId,
+      programId: offeringForm.programId ? Number(offeringForm.programId) : null,
+      studentYearLevel: offeringForm.studentYearLevel
+        ? Number(offeringForm.studentYearLevel)
+        : null,
+      section: offeringForm.section.trim().toUpperCase(),
+      maxStudents: offeringForm.maxStudents,
+      isActive: offeringForm.isActive,
+    };
+
     try {
-      await academicApi.createOffering(offeringForm);
-      toast.success("Course offering created successfully");
+      if (editingOffering) {
+        await academicApi.updateOffering(editingOffering.id, payload);
+        toast.success("Course assignment updated successfully");
+      } else {
+        await academicApi.createOffering(payload);
+        toast.success("Course assignment created successfully");
+      }
       setShowOfferingModal(false);
+      setEditingOffering(null);
       loadData();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || "Failed to create course offering");
+      toast.error(
+        error.response?.data?.message ||
+          (editingOffering
+            ? "Failed to update course assignment"
+            : "Failed to create course assignment")
+      );
     }
   };
+
+  const handleToggleOfferingStatus = async (assignment: CourseOffering) => {
+    try {
+      const nextStatus = !assignment.isActive;
+      await academicApi.toggleOfferingStatus(assignment.id, nextStatus);
+      toast.success(
+        nextStatus
+          ? "Course assignment activated"
+          : "Course assignment deactivated"
+      );
+      loadData();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(
+        error.response?.data?.message || "Failed to update course assignment status"
+      );
+    }
+  };
+
+  const handleOpenAssignmentRoster = async (assignment: CourseOffering) => {
+    setRosterOffering(assignment);
+    setLoadingRoster(true);
+    try {
+      const res = await academicApi.getOfferingEnrolledStudents(assignment.id);
+      if (res.success && res.data) {
+        setRosterStudents(res.data);
+      } else {
+        setRosterStudents([]);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load enrolled students");
+      setRosterStudents([]);
+    } finally {
+      setLoadingRoster(false);
+    }
+  };
+
+  const filteredAssignments = useMemo(() => {
+    const q = assignmentSearch.trim().toLowerCase();
+    return offerings.filter((o) => {
+      const sem = semesters.find((s) => s.id === o.semesterId);
+      const effectiveYearId = o.academicYearId ?? sem?.academicYearId;
+      const effectiveYearName = o.academicYearName || sem?.academicYearName || "";
+
+      const matchSearch =
+        !q ||
+        o.courseCode.toLowerCase().includes(q) ||
+        o.courseName.toLowerCase().includes(q) ||
+        (o.programName && o.programName.toLowerCase().includes(q)) ||
+        (o.programCode && o.programCode.toLowerCase().includes(q)) ||
+        o.semesterName.toLowerCase().includes(q) ||
+        effectiveYearName.toLowerCase().includes(q) ||
+        o.section.toLowerCase().includes(q) ||
+        o.instructorName.toLowerCase().includes(q);
+
+      const matchProgram =
+        !filterProgramId || String(o.programId ?? "") === filterProgramId;
+      const matchYear =
+        !filterYearId || String(effectiveYearId ?? "") === filterYearId;
+      const matchSemester =
+        !filterSemesterId || String(o.semesterId) === filterSemesterId;
+      const matchInstructor =
+        !filterInstructorId || String(o.instructorId) === filterInstructorId;
+
+      return matchSearch && matchProgram && matchYear && matchSemester && matchInstructor;
+    });
+  }, [
+    offerings,
+    semesters,
+    assignmentSearch,
+    filterProgramId,
+    filterYearId,
+    filterSemesterId,
+    filterInstructorId,
+  ]);
+
+  const modalSemesters = useMemo(() => {
+    if (!offeringForm.academicYearId) return semesters;
+    const filtered = semesters.filter(
+      (s) => String(s.academicYearId) === offeringForm.academicYearId
+    );
+    return filtered.length > 0 ? filtered : semesters;
+  }, [semesters, offeringForm.academicYearId]);
 
   const handleCreateInstructor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -301,7 +493,7 @@ export default function AdminAcademicHubPage() {
                 Academic Management Hub
               </h2>
               <p className="text-sm text-slate-600 mt-1.5">
-                Comprehensive configuration of Degree Programs, Academic Years, Semesters, Course Offerings, Students, and Bulk Import
+                Comprehensive configuration of Degree Programs, Academic Years, Semesters, Course Assignments, Students, and Bulk Import
               </p>
             </div>
           </div>
@@ -322,7 +514,7 @@ export default function AdminAcademicHubPage() {
             <div className="text-2xl font-bold text-amber-600 mt-1">{semesters.length}</div>
           </div>
           <div className="bg-white border border-blue-100 rounded-xl p-4 shadow-xs hover:border-blue-300 transition-all">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Offerings</div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assignments</div>
             <div className="text-2xl font-bold text-indigo-600 mt-1">{offerings.length}</div>
           </div>
           <div className="bg-white border border-blue-100 rounded-xl p-4 shadow-xs hover:border-blue-300 transition-all">
@@ -340,7 +532,7 @@ export default function AdminAcademicHubPage() {
           {[
             { id: "programs", label: "Degree Programs", icon: Layers },
             { id: "academic-years", label: "Years & Semesters", icon: Calendar },
-            { id: "offerings", label: "Course Offerings", icon: BookOpen },
+            { id: "offerings", label: "Course Assignments", icon: BookOpen },
             { id: "students", label: "Student Records", icon: Users },
             { id: "instructors", label: "Faculty Records", icon: GraduationCap },
             { id: "bulk-import", label: "Bulk CSV Import", icon: UploadCloud },
@@ -548,77 +740,238 @@ export default function AdminAcademicHubPage() {
           </div>
         )}
 
-        {/* TAB 3: COURSE OFFERINGS */}
+        {/* TAB 3: COURSE ASSIGNMENTS */}
         {activeTab === "offerings" && (
           <div className="bg-white rounded-xl border border-blue-100/90 shadow-xs overflow-hidden">
-            <div className="flex flex-row items-center justify-between p-5 border-b border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 border-b border-slate-100">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Course Offerings</h3>
+                <h3 className="text-lg font-bold text-slate-900">Course Assignments</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Active course sections scheduled for specific semesters with assigned faculty
+                  Assign catalog courses to academic programs, years, semesters, student year levels, sections, and instructors
                 </p>
               </div>
               <Button
-                onClick={() => {
-                  if (instructors.length > 0) {
-                    setOfferingForm((prev) => ({
-                      ...prev,
-                      courseId: prev.courseId || (courses.length > 0 ? courses[0].id : 0),
-                      semesterId: prev.semesterId || (semesters.length > 0 ? semesters[0].id : 0),
-                      instructorId: prev.instructorId || instructors[0].id,
-                    }));
-                  }
-                  setShowOfferingModal(true);
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-9 shadow-xs"
+                onClick={openCreateAssignmentModal}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs h-9 shadow-xs shrink-0"
               >
                 <Plus className="w-4 h-4 mr-1.5" />
-                Create Offering
+                Add Course Assignment
               </Button>
             </div>
+
+            {/* Search & Filters Toolbar */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
+                <div className="relative lg:col-span-2">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Input
+                    value={assignmentSearch}
+                    onChange={(e) => setAssignmentSearch(e.target.value)}
+                    placeholder="Search course assignments..."
+                    className="pl-9 h-9 bg-white border-slate-200 text-xs"
+                  />
+                </div>
+
+                <select
+                  aria-label="Filter by Academic Program"
+                  value={filterProgramId}
+                  onChange={(e) => setFilterProgramId(e.target.value)}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Programs</option>
+                  {programs.map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.code} - {p.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  aria-label="Filter by Academic Year"
+                  value={filterYearId}
+                  onChange={(e) => setFilterYearId(e.target.value)}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Academic Years</option>
+                  {academicYears.map((ay) => (
+                    <option key={ay.id} value={String(ay.id)}>
+                      {ay.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  aria-label="Filter by Semester"
+                  value={filterSemesterId}
+                  onChange={(e) => setFilterSemesterId(e.target.value)}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Semesters</option>
+                  {semesters.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  aria-label="Filter by Instructor"
+                  value={filterInstructorId}
+                  onChange={(e) => setFilterInstructorId(e.target.value)}
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Instructors</option>
+                  {instructors.map((ins) => (
+                    <option key={ins.id} value={String(ins.id)}>
+                      {ins.userFullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(assignmentSearch || filterProgramId || filterYearId || filterSemesterId || filterInstructorId) && (
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>
+                    Showing <strong>{filteredAssignments.length}</strong> of {offerings.length} course assignments
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentSearch("");
+                      setFilterProgramId("");
+                      setFilterYearId("");
+                      setFilterSemesterId("");
+                      setFilterInstructorId("");
+                    }}
+                    className="text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm border-collapse bg-white">
                 <thead className="bg-blue-50/70 border-b border-blue-100 text-slate-700 text-xs font-semibold uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Course</th>
-                    <th className="py-3 px-4">Semester</th>
+                    <th className="py-3 px-4">Program & Level</th>
+                    <th className="py-3 px-4">Academic Year & Semester</th>
                     <th className="py-3 px-4">Section</th>
-                    <th className="py-3 px-4">Assigned Faculty</th>
-                    <th className="py-3 px-4">Capacity</th>
+                    <th className="py-3 px-4">Assigned Instructor</th>
+                    <th className="py-3 px-4">Enrolled</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {offerings.map((o) => (
-                    <tr key={o.id} className="hover:bg-blue-50/40 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-semibold text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md mr-1.5">
-                          {o.courseCode}
-                        </span>
-                        <span className="text-slate-900 font-semibold text-xs">{o.courseName}</span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-700 text-xs font-medium">{o.semesterName}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900 text-xs">Section {o.section}</td>
-                      <td className="py-3 px-4 text-slate-800 text-xs font-medium">
-                        {o.instructorName}
-                        <span className="text-[11px] text-slate-500 block">
-                          ({o.instructorEmployeeId})
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-xs font-medium">
-                        <span className="font-bold text-slate-900">{o.enrolledStudentsCount || 0}</span>
-                        <span className="text-slate-500"> / {o.maxStudents}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge
-                          variant={o.isActive ? "success" : "secondary"}
-                          className="font-semibold text-[11px]"
-                        >
-                          {o.isActive ? "Active" : "Archived"}
-                        </Badge>
+                  {filteredAssignments.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-sm text-slate-500">
+                        {offerings.length === 0
+                          ? 'No course assignments found. Click "Add Course Assignment" to create one.'
+                          : "No course assignments match your search or selected filters."}
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredAssignments.map((o) => {
+                      const matchingSem = semesters.find((s) => s.id === o.semesterId);
+                      const yearLabel = o.academicYearName || matchingSem?.academicYearName || "Current Year";
+                      const programLabel = o.programCode
+                        ? `${o.programCode}${o.programName ? ` — ${o.programName}` : ""}`
+                        : "General / Unspecified";
+                      const levelLabel = o.studentYearLevel ? `Year ${o.studentYearLevel}` : "All Levels";
+
+                      return (
+                        <tr key={o.id} className="hover:bg-blue-50/40 transition-colors">
+                          <td className="py-3 px-4">
+                            <span className="font-mono font-semibold text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md mr-1.5">
+                              {o.courseCode}
+                            </span>
+                            <span className="text-slate-900 font-semibold text-xs">{o.courseName}</span>
+                          </td>
+                          <td className="py-3 px-4 text-xs">
+                            <div className="font-medium text-slate-800 max-w-[190px] truncate" title={programLabel}>
+                              {programLabel}
+                            </div>
+                            <span className="text-[11px] text-slate-500">{levelLabel}</span>
+                          </td>
+                          <td className="py-3 px-4 text-xs">
+                            <div className="font-semibold text-slate-800">{o.semesterName}</div>
+                            <span className="text-[11px] text-slate-500">{yearLabel}</span>
+                          </td>
+                          <td className="py-3 px-4 font-bold text-slate-900 text-xs">Section {o.section}</td>
+                          <td className="py-3 px-4 text-slate-800 text-xs font-medium">
+                            {o.instructorName}
+                            <span className="text-[11px] text-slate-500 block">
+                              ({o.instructorEmployeeId})
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-xs font-medium">
+                            <span className="font-bold text-slate-900">{o.enrolledStudentsCount || 0}</span>
+                            <span className="text-slate-500"> / {o.maxStudents}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge
+                              variant={o.isActive ? "success" : "secondary"}
+                              className="font-semibold text-[11px]"
+                            >
+                              {o.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                title="View Course Assignment"
+                                onClick={() => setViewingOffering(o)}
+                                className="h-8 px-2 text-slate-600 hover:text-blue-700 hover:bg-blue-50 text-xs"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                title="Edit Course Assignment"
+                                onClick={() => openEditAssignmentModal(o)}
+                                className="h-8 px-2 text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 text-xs"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                title={o.isActive ? "Deactivate Course Assignment" : "Activate Course Assignment"}
+                                onClick={() => handleToggleOfferingStatus(o)}
+                                className={`h-8 px-2 text-xs ${
+                                  o.isActive
+                                    ? "text-amber-600 hover:text-amber-800 hover:bg-amber-50"
+                                    : "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
+                                }`}
+                              >
+                                <Power className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenAssignmentRoster(o)}
+                                className="h-8 px-2.5 text-xs border-slate-200 text-slate-700 hover:bg-slate-50 gap-1"
+                              >
+                                <Users className="w-3.5 h-3.5 text-blue-600" />
+                                Students
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1137,16 +1490,31 @@ export default function AdminAcademicHubPage() {
           </div>
         )}
 
-        {/* CREATE COURSE OFFERING MODAL */}
+        {/* CREATE / EDIT COURSE ASSIGNMENT MODAL */}
         {showOfferingModal && (
           <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white border border-slate-200 text-slate-900 max-w-md w-full rounded-2xl shadow-2xl p-6 space-y-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Create Course Offering</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Assign faculty to a course in an active semester
-                </p>
+            <div className="bg-white border border-slate-200 text-slate-900 max-w-lg w-full rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {editingOffering ? "Edit Course Assignment" : "Add Course Assignment"}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Assign a catalog course to an academic program, year, semester, year level, section, and instructor
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOfferingModal(false);
+                    setEditingOffering(null);
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
+
               <form onSubmit={handleCreateOffering} className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
@@ -1156,6 +1524,7 @@ export default function AdminAcademicHubPage() {
                     value={offeringForm.courseId}
                     onChange={(e) => setOfferingForm({ ...offeringForm, courseId: Number(e.target.value) })}
                     className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   >
                     {courses.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -1164,25 +1533,112 @@ export default function AdminAcademicHubPage() {
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
-                    Semester Term
+                    Academic Program
                   </label>
                   <select
-                    value={offeringForm.semesterId}
-                    onChange={(e) => setOfferingForm({ ...offeringForm, semesterId: Number(e.target.value) })}
+                    value={offeringForm.programId}
+                    onChange={(e) => setOfferingForm({ ...offeringForm, programId: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {semesters.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.academicYearName})
+                    <option value="">All / General Program</option>
+                    {programs.map((p) => (
+                      <option key={p.id} value={String(p.id)}>
+                        {p.code} - {p.name}
                       </option>
                     ))}
                   </select>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
+                      Academic Year
+                    </label>
+                    <select
+                      value={offeringForm.academicYearId}
+                      onChange={(e) => {
+                        const newYearId = e.target.value;
+                        const matchingSem = semesters.find(
+                          (s) => !newYearId || String(s.academicYearId) === newYearId
+                        );
+                        setOfferingForm({
+                          ...offeringForm,
+                          academicYearId: newYearId,
+                          semesterId: matchingSem ? matchingSem.id : offeringForm.semesterId,
+                        });
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Academic Years</option>
+                      {academicYears.map((ay) => (
+                        <option key={ay.id} value={String(ay.id)}>
+                          {ay.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
+                      Semester
+                    </label>
+                    <select
+                      value={offeringForm.semesterId}
+                      onChange={(e) =>
+                        setOfferingForm({ ...offeringForm, semesterId: Number(e.target.value) })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      {modalSemesters.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.academicYearName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
+                      Student Year Level
+                    </label>
+                    <select
+                      value={offeringForm.studentYearLevel}
+                      onChange={(e) =>
+                        setOfferingForm({ ...offeringForm, studentYearLevel: e.target.value })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Year Levels</option>
+                      <option value="1">Year 1</option>
+                      <option value="2">Year 2</option>
+                      <option value="3">Year 3</option>
+                      <option value="4">Year 4</option>
+                      <option value="5">Year 5</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
+                      Section
+                    </label>
+                    <Input
+                      required
+                      value={offeringForm.section}
+                      onChange={(e) => setOfferingForm({ ...offeringForm, section: e.target.value })}
+                      className="bg-white border-slate-300 uppercase"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
-                    Assigned Faculty Instructor
+                    Assigned Instructor
                   </label>
                   <select
                     value={offeringForm.instructorId}
@@ -1201,18 +1657,24 @@ export default function AdminAcademicHubPage() {
                     )}
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
-                      Section
+                      Status
                     </label>
-                    <Input
-                      required
-                      value={offeringForm.section}
-                      onChange={(e) => setOfferingForm({ ...offeringForm, section: e.target.value })}
-                      className="bg-white border-slate-300 uppercase"
-                    />
+                    <select
+                      value={offeringForm.isActive ? "ACTIVE" : "INACTIVE"}
+                      onChange={(e) =>
+                        setOfferingForm({ ...offeringForm, isActive: e.target.value === "ACTIVE" })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
                   </div>
+
                   <div>
                     <label className="text-xs font-semibold text-slate-700 uppercase mb-1 block">
                       Max Students Capacity
@@ -1228,19 +1690,211 @@ export default function AdminAcademicHubPage() {
                     />
                   </div>
                 </div>
+
                 <div className="flex justify-end gap-2 pt-3">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowOfferingModal(false)}
+                    onClick={() => {
+                      setShowOfferingModal(false);
+                      setEditingOffering(null);
+                    }}
                   >
                     Cancel
                   </Button>
                   <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-                    Create Offering
+                    {editingOffering ? "Save Course Assignment" : "Add Course Assignment"}
                   </Button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW COURSE ASSIGNMENT DETAILS MODAL */}
+        {viewingOffering && (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 text-slate-900 max-w-lg w-full rounded-2xl shadow-2xl p-6 space-y-5">
+              <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Course Assignment Details</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {viewingOffering.courseCode} — {viewingOffering.courseName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingOffering(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Course</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    {viewingOffering.courseCode} — {viewingOffering.courseName}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Academic Program</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    {viewingOffering.programCode
+                      ? `${viewingOffering.programCode} — ${viewingOffering.programName}`
+                      : "General / Unspecified"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Academic Year</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    {viewingOffering.academicYearName ||
+                      semesters.find((s) => s.id === viewingOffering.semesterId)?.academicYearName ||
+                      "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Semester</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    {viewingOffering.semesterName}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Student Year Level</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    {viewingOffering.studentYearLevel ? `Year ${viewingOffering.studentYearLevel}` : "All Year Levels"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Section</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    Section {viewingOffering.section}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Assigned Instructor</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    {viewingOffering.instructorName} ({viewingOffering.instructorEmployeeId})
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-semibold block">Status & Enrollment</span>
+                  <span className="text-slate-900 font-semibold mt-0.5 block">
+                    {viewingOffering.isActive ? "Active" : "Inactive"} ({viewingOffering.enrolledStudentsCount || 0} /{" "}
+                    {viewingOffering.maxStudents})
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const target = viewingOffering;
+                    setViewingOffering(null);
+                    handleOpenAssignmentRoster(target);
+                  }}
+                  className="text-xs gap-1.5"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  View Enrolled Students
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingOffering;
+                    setViewingOffering(null);
+                    openEditAssignmentModal(target);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs gap-1.5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit Course Assignment
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW ENROLLED STUDENTS MODAL */}
+        {rosterOffering && (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 text-slate-900 max-w-2xl w-full rounded-2xl shadow-2xl overflow-hidden">
+              <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {rosterOffering.courseCode} — {rosterOffering.courseName}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Enrolled Students in Course Assignment &bull; Section {rosterOffering.section} &bull;{" "}
+                    {rosterOffering.semesterName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRosterOffering(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                {loadingRoster ? (
+                  <div className="py-10 text-center text-xs text-slate-400">
+                    Loading enrolled students...
+                  </div>
+                ) : rosterStudents.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-slate-500">
+                    No students are currently enrolled in this course assignment.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl max-h-80 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-semibold border-b border-slate-200 sticky top-0">
+                        <tr>
+                          <th className="p-3">Reg Number</th>
+                          <th className="p-3">Student Name</th>
+                          <th className="p-3">Email</th>
+                          <th className="p-3">Enrolled Date</th>
+                          <th className="p-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {rosterStudents.map((st) => (
+                          <tr key={st.id} className="hover:bg-slate-50">
+                            <td className="p-3 font-mono font-semibold text-blue-700">
+                              {st.studentRegistrationNumber}
+                            </td>
+                            <td className="p-3 font-medium text-slate-900">{st.studentName}</td>
+                            <td className="p-3 text-slate-500">{st.studentEmail}</td>
+                            <td className="p-3 text-slate-500">{st.enrolledDate}</td>
+                            <td className="p-3">
+                              <Badge variant={st.status === "ACTIVE" ? "success" : "secondary"}>
+                                {st.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <span className="text-xs text-slate-500">
+                    Total Enrolled: <strong>{rosterStudents.length}</strong>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setRosterOffering(null)}
+                    className="text-xs h-8"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         )}

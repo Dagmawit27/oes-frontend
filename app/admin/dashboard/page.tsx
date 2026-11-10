@@ -509,7 +509,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-slate-600">
-                Set up departments, academic programs, semester calendars, and course offerings for students.
+                Set up departments, academic programs, semester calendars, and course assignments for students.
               </p>
               <Link
                 href="/admin/academic"

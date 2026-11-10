@@ -372,7 +372,7 @@ function ExamOfficerSchedulingContent() {
                       onChange={(e) => setSelectedOffering(e.target.value)}
                       className="w-full h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
-                      <option value="">All Course Offerings</option>
+                      <option value="">All Course Assignments</option>
                       {offerings.map((co) => (
                         <option key={co.id} value={co.id}>
                           {co.courseCode} - {co.courseName} (Sec {co.section})

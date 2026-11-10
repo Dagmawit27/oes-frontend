@@ -29,7 +29,7 @@ export default function ExamOfficerAcademicPage() {
       }
     } catch (err) {
       console.error(err);
-      toast.error("Failed to load course offerings");
+      toast.error("Failed to load course assignments");
     } finally {
       setLoading(false);
     }
@@ -78,7 +78,7 @@ export default function ExamOfficerAcademicPage() {
                 <BookOpen className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Offerings</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Course Assignments</p>
                 <p className="text-2xl font-bold text-slate-900 mt-0.5">{offerings.length}</p>
                 <p className="text-[11px] text-slate-500">Across current academic terms</p>
               </div>
@@ -118,15 +118,15 @@ export default function ExamOfficerAcademicPage() {
         {loading ? (
           <div className="py-16 text-center text-sm text-slate-400 bg-white border border-slate-200/90 rounded-2xl">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mb-2"></div>
-            <p>Loading academic offerings...</p>
+            <p>Loading course assignments...</p>
           </div>
         ) : filteredOfferings.length === 0 ? (
           <Card className="bg-white border-slate-200/90 shadow-xs">
             <CardContent className="py-16 text-center">
               <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-base font-semibold text-slate-800">No Course Offerings Found</p>
+              <p className="text-base font-semibold text-slate-800">No Course Assignments Found</p>
               <p className="text-xs text-slate-500 mt-1">
-                {search ? "No course offerings match your search query." : "No course offerings have been created yet."}
+                {search ? "No course assignments match your search query." : "No course assignments have been created yet."}
               </p>
             </CardContent>
           </Card>
@@ -135,10 +135,10 @@ export default function ExamOfficerAcademicPage() {
             <CardHeader className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-bold text-slate-900">
-                  Course Offerings ({filteredOfferings.length})
+                  Course Assignments ({filteredOfferings.length})
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-500">
-                  Select an offering to inspect the live candidate roster
+                  Select a course assignment to inspect the live candidate roster
                 </CardDescription>
               </div>
             </CardHeader>

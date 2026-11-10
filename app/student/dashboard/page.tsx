@@ -45,7 +45,7 @@ export default function StudentDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-slate-600">
-                Check registered course offerings, instructor details, syllabus coverage, and scheduled assessment timetables.
+                Check registered course assignments, instructor details, syllabus coverage, and scheduled assessment timetables.
               </p>
               <Link href="/student/courses" className="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
                 My courses <ArrowRight className="w-4 h-4 ml-1" />

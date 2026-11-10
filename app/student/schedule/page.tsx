@@ -436,7 +436,7 @@ function StudentScheduleContent() {
                       {selectedExamForModal.eligibilityStatus}
                     </p>
                     <p className="text-slate-500">
-                      {selectedExamForModal.eligibilityReason || "Enrolled in course offering"}
+                      {selectedExamForModal.eligibilityReason || "Enrolled in course assignment"}
                     </p>
                   </div>
                 </div>

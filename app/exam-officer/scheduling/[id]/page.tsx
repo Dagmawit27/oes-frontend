@@ -744,7 +744,7 @@ function ScheduleDetailsContent() {
                         {getEligibilityBadge(eligibility.eligibilityStatus)}
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-500 max-w-xs truncate">
-                        {eligibility.reason || "Enrolled in course offering"}
+                        {eligibility.reason || "Enrolled in course assignment"}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         {isReadOnly ? (
@@ -1030,7 +1030,7 @@ function ScheduleDetailsContent() {
 
               <form onSubmit={handleAddExceptionSubmit} className="p-5 space-y-4">
                 <p className="text-xs text-slate-500">
-                  Register an individual student who is not part of the standard course offering enrollment,
+                  Register an individual student who is not part of the standard course assignment enrollment,
                   or assign special eligibility clearance.
                 </p>
 

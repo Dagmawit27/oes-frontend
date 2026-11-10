@@ -88,7 +88,7 @@ export const academicApi = {
     return response.data;
   },
 
-  // Course Offerings
+  // Course Assignments
   async getCourseOfferings(semesterId?: number): Promise<ApiResponse<CourseOffering[]>> {
     const response = await apiClient.get<ApiResponse<CourseOffering[]>>("/course-offerings", {
       params: semesterId ? { semesterId } : {},
@@ -113,6 +113,20 @@ export const academicApi = {
 
   async createOffering(data: Partial<CourseOffering>): Promise<ApiResponse<CourseOffering>> {
     const response = await apiClient.post<ApiResponse<CourseOffering>>("/course-offerings", data);
+    return response.data;
+  },
+
+  async updateOffering(id: number, data: Partial<CourseOffering>): Promise<ApiResponse<CourseOffering>> {
+    const response = await apiClient.put<ApiResponse<CourseOffering>>(`/course-offerings/${id}`, data);
+    return response.data;
+  },
+
+  async toggleOfferingStatus(id: number, isActive?: boolean): Promise<ApiResponse<CourseOffering>> {
+    const response = await apiClient.patch<ApiResponse<CourseOffering>>(
+      `/course-offerings/${id}/status`,
+      null,
+      { params: isActive !== undefined ? { isActive } : {} }
+    );
     return response.data;
   },
 

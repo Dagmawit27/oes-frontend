@@ -162,7 +162,7 @@ export default function StudentCoursesPage() {
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 {search
                   ? "Try searching with a different course code or keyword."
-                  : "You are not currently registered in any active course offerings for this academic term."}
+                  : "You are not currently registered in any active course assignments for this academic term."}
               </p>
             </CardContent>
           </Card>

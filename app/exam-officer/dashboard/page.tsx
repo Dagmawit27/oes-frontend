@@ -369,12 +369,12 @@ export default function ExamOfficerDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Card 4: Course Offerings (Amber Area Chart from DB) */}
+          {/* Card 4: Course Assignments (Amber Area Chart from DB) */}
           <Card className="flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-md transition-shadow bg-white border-slate-200">
             <CardHeader className="flex flex-row items-start justify-between pb-1 space-y-0">
               <div>
                 <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Course Offerings
+                  Course Assignments
                 </CardTitle>
                 <div className="text-2xl font-bold text-slate-900 mt-1">
                   {loading ? "..." : `${totalOfferingsCount} Active`}
@@ -664,7 +664,7 @@ export default function ExamOfficerDashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Academic Offerings */}
+            {/* Course Assignments */}
             <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-all group">
               <CardContent className="p-5 space-y-3">
                 <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center border border-sky-200/60 group-hover:scale-105 transition-transform">
@@ -672,17 +672,17 @@ export default function ExamOfficerDashboardPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 group-hover:text-sky-700 transition-colors">
-                    Academic Offerings & Rosters
+                    Course Assignments & Rosters
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Inspect active semester courses, assigned faculty members, capacity caps, and enrolled student directories.
+                    Inspect active semester course assignments, assigned instructors, capacity caps, and enrolled student directories.
                   </p>
                 </div>
                 <Link
                   href="/exam-officer/academic"
                   className="inline-flex items-center text-xs font-semibold text-sky-600 hover:text-sky-700 pt-1"
                 >
-                  View Offerings <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  View Course Assignments <ArrowRight className="w-3.5 h-3.5 ml-1" />
                 </Link>
               </CardContent>
             </Card>

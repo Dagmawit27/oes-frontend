@@ -110,7 +110,7 @@ export default function CreateExaminationPage() {
           }
         }
       } catch (err: any) {
-        toast.error("Failed to load course offerings");
+        toast.error("Failed to load course assignments");
       } finally {
         setLoadingOfferings(false);
       }
@@ -266,7 +266,7 @@ export default function CreateExaminationPage() {
   // Submit and create new question directly into this exam
   const handleCreateAndAddQuestion = async () => {
     if (!selectedOffering) {
-      toast.error("Please select a course offering first");
+      toast.error("Please select a course assignment first");
       return;
     }
     if (!newQuestionText.trim()) {
@@ -419,7 +419,7 @@ export default function CreateExaminationPage() {
       return;
     }
     if (!selectedOfferingId) {
-      toast.error("Please select a course offering");
+      toast.error("Please select a course assignment");
       return;
     }
     if (selectedItems.length === 0) {
@@ -542,7 +542,7 @@ export default function CreateExaminationPage() {
               <CardContent className="p-4 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Course Offering <span className="text-rose-500">*</span>
+                    Course Assignment <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={selectedOfferingId}

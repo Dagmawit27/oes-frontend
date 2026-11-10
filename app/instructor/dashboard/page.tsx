@@ -60,7 +60,7 @@ export default function InstructorDashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                My Courses
+                My Course Assignments
               </CardTitle>
               <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                 <BookOpen className="w-4 h-4" />
@@ -68,10 +68,10 @@ export default function InstructorDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900">
-                {loading ? "..." : `${stats?.assignedCoursesCount ?? 0} Courses`}
+                {loading ? "..." : `${stats?.assignedCoursesCount ?? 0} Assignments`}
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                {loading ? "Loading active offerings..." : `${stats?.totalEnrolledStudents ?? 0} Enrolled students`}
+                {loading ? "Loading active course assignments..." : `${stats?.totalEnrolledStudents ?? 0} Enrolled students`}
               </p>
             </CardContent>
           </Card>

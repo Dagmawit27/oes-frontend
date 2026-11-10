@@ -55,6 +55,12 @@ export interface CourseOffering {
   courseCode: string;
   semesterId: number;
   semesterName: string;
+  academicYearId?: number;
+  academicYearName?: string;
+  programId?: number | null;
+  programName?: string | null;
+  programCode?: string | null;
+  studentYearLevel?: number | null;
   instructorId: number;
   instructorName: string;
   instructorEmployeeId: string;

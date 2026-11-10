@@ -83,7 +83,7 @@ export default function EnrollmentsPage() {
     try {
       const res = await academicApi.enrollStudent(studentId, courseOfferingId);
       if (res.success) {
-        setSuccess("Student enrolled successfully into course offering!");
+        setSuccess("Student enrolled successfully into course assignment!");
         setShowModal(false);
         fetchData();
       }
@@ -462,7 +462,7 @@ export default function EnrollmentsPage() {
             <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-blue-600" />
-                Enroll Student into Course Offering
+                Enroll Student into Course Assignment
               </h3>
 
               {error && (
@@ -494,13 +494,13 @@ export default function EnrollmentsPage() {
                     )}
                   </select>
                   <p className="text-xs text-slate-500 mt-1">
-                    Select the registered student to enroll into this course offering.
+                    Select the registered student to enroll into this course assignment.
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Select Course Offering
+                    Select Course Assignment
                   </label>
                   <select
                     className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"

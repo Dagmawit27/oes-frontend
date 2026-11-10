@@ -60,19 +60,19 @@ export default function InstructorCoursesPage() {
         <div className="bg-white border border-slate-200/90 p-6 rounded-2xl text-slate-800 shadow-xs">
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
             <BookOpen className="w-6 h-6 text-sky-600" />
-            My Assigned Course Offerings
+            My Course Assignments
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            Courses you are instructing for the active academic semester with live student rosters
+            Course assignments you are instructing for the active academic semester with live student rosters
           </p>
         </div>
 
         {isLoading ? (
-          <div className="py-16 text-center text-sm text-slate-400">Loading assigned courses...</div>
+          <div className="py-16 text-center text-sm text-slate-400">Loading assigned course assignments...</div>
         ) : offerings.length === 0 ? (
           <Card className="bg-white border-2 border-dashed border-slate-200 text-slate-600">
             <CardContent className="py-16 text-center text-slate-500">
-              No courses are currently assigned to your instructor profile.
+              No course assignments are currently assigned to your instructor profile.
             </CardContent>
           </Card>
         ) : (

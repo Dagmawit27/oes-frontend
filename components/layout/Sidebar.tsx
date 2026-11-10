@@ -52,7 +52,7 @@ export function Sidebar() {
 
   const officerNav: NavItem[] = [
     { label: "Dashboard", href: "/exam-officer/dashboard", icon: LayoutDashboard },
-    { label: "Academic Offerings", href: "/exam-officer/academic", icon: BookOpen },
+    { label: "Course Assignments", href: "/exam-officer/academic", icon: BookOpen },
     { label: "Exam Approvals", href: "/exam-officer/approvals", icon: ClipboardCheck },
     { label: "Exam Scheduling", href: "/exam-officer/scheduling", icon: CalendarClock },
     { label: "Live Monitoring", href: "/exam-officer/monitoring", icon: Clock },
@@ -61,7 +61,7 @@ export function Sidebar() {
 
   const instructorNav: NavItem[] = [
     { label: "Dashboard", href: "/instructor/dashboard", icon: LayoutDashboard },
-    { label: "My Courses", href: "/instructor/courses", icon: BookOpen },
+    { label: "My Course Assignments", href: "/instructor/courses", icon: BookOpen },
     { label: "Examinations", href: "/instructor/examinations", icon: FileSpreadsheet },
     { label: "Submissions", href: "/instructor/submissions", icon: ClipboardCheck },
     { label: "Manual Grading", href: "/instructor/grading", icon: CheckCircle2 },
