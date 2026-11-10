@@ -10,7 +10,7 @@ import { scheduleApi } from "@/lib/api/schedule";
 import { monitoringApi } from "@/lib/api/monitoring";
 import { academicApi } from "@/lib/api/academic";
 import { Examination } from "@/types/exam";
-import { ExamSchedule } from "@/types/schedule";
+import { ExamSchedule, isSchedulePassedOrClosed } from "@/types/schedule";
 import { ScheduleMonitoringSummary } from "@/types/monitoring";
 import { CourseOffering } from "@/types/academic";
 import {
@@ -20,7 +20,6 @@ import {
   Award,
   ArrowRight,
   BookOpen,
-  UserCheck,
   CheckCircle2,
   Calendar,
   TrendingUp,
@@ -530,52 +529,59 @@ export default function ExamOfficerDashboardPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {upcomingSchedules.slice(0, 5).map((sched) => (
-                    <div
-                      key={sched.id}
-                      className="p-4 hover:bg-slate-50/80 transition-colors flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900 truncate max-w-xs sm:max-w-sm">
-                            {sched.examinationTitle}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                              sched.status === "SCHEDULED"
-                                ? "bg-sky-50 text-sky-700 border border-sky-200"
-                                : "bg-slate-100 text-slate-700"
-                            }`}
-                          >
-                            {sched.status}
-                          </span>
+                  {upcomingSchedules.slice(0, 5).map((sched) => {
+                    const passed = isSchedulePassedOrClosed(sched);
+                    const targetHref = passed
+                      ? `/exam-officer/grading-review/${sched.examinationId}`
+                      : `/exam-officer/scheduling/${sched.id}`;
+
+                    return (
+                      <div
+                        key={sched.id}
+                        className="p-4 hover:bg-slate-50/80 transition-colors flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-900 truncate max-w-xs sm:max-w-sm">
+                              {sched.examinationTitle}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                sched.status === "SCHEDULED" && !passed
+                                  ? "bg-sky-50 text-sky-700 border border-sky-200"
+                                  : "bg-slate-100 text-slate-700"
+                              }`}
+                            >
+                              {sched.status !== "COMPLETED" && passed ? "CLOSED" : sched.status}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
+                            <span>{sched.courseCode}</span>
+                            <span>&bull;</span>
+                            <span className="text-slate-700 font-medium">
+                              {new Date(sched.scheduledStartAt).toLocaleDateString()}
+                            </span>
+                            <span>&bull;</span>
+                            <span>
+                              {new Date(sched.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} –{" "}
+                              {new Date(sched.scheduledCloseAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                            {sched.roomName && (
+                              <>
+                                <span>&bull;</span>
+                                <span className="text-slate-700 font-medium">{sched.roomName}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
-                          <span>{sched.courseCode}</span>
-                          <span>&bull;</span>
-                          <span className="text-slate-700 font-medium">
-                            {new Date(sched.scheduledStartAt).toLocaleDateString()}
-                          </span>
-                          <span>&bull;</span>
-                          <span>
-                            {new Date(sched.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} –{" "}
-                            {new Date(sched.scheduledCloseAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          {sched.roomName && (
-                            <>
-                              <span>&bull;</span>
-                              <span className="text-slate-700 font-medium">{sched.roomName}</span>
-                            </>
-                          )}
-                        </div>
+                        <Link href={targetHref}>
+                          <Button variant="outline" size="sm" className="text-xs h-8 gap-1 shrink-0 text-slate-700">
+                            {passed ? "Grading Review" : "Manage"} <ArrowRight className="w-3 h-3" />
+                          </Button>
+                        </Link>
                       </div>
-                      <Link href={`/exam-officer/scheduling/${sched.id}`}>
-                        <Button variant="outline" size="sm" className="text-xs h-8 gap-1 shrink-0 text-slate-700">
-                          Manage <ArrowRight className="w-3 h-3" />
-                        </Button>
-                      </Link>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -612,7 +618,7 @@ export default function ExamOfficerDashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Scheduling */}
+            {/* Scheduling & Eligibility */}
             <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-all group">
               <CardContent className="p-5 space-y-3">
                 <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center border border-sky-200/60 group-hover:scale-105 transition-transform">
@@ -620,40 +626,17 @@ export default function ExamOfficerDashboardPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 group-hover:text-sky-700 transition-colors">
-                    Scheduling & Rooms
+                    Scheduling, Rooms & Eligibility
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Set calendar time windows, detect room & candidate timetable conflicts, and allocate campus test halls.
+                    Set calendar time windows, detect conflicts, allocate rooms, and manage candidate eligibility rosters.
                   </p>
                 </div>
                 <Link
                   href="/exam-officer/scheduling"
                   className="inline-flex items-center text-xs font-semibold text-sky-600 hover:text-sky-700 pt-1"
                 >
-                  Manage Schedules <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Student Eligibility */}
-            <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-all group">
-              <CardContent className="p-5 space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center border border-sky-200/60 group-hover:scale-105 transition-transform">
-                  <UserCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-sky-700 transition-colors">
-                    Student Eligibility
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Verify enrollment rosters, confirm student eligibility prerequisites, and issue authorized administrative exemptions.
-                  </p>
-                </div>
-                <Link
-                  href="/exam-officer/eligibility"
-                  className="inline-flex items-center text-xs font-semibold text-sky-600 hover:text-sky-700 pt-1"
-                >
-                  Review Candidate Rosters <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  Manage Schedules & Rosters <ArrowRight className="w-3.5 h-3.5 ml-1" />
                 </Link>
               </CardContent>
             </Card>
@@ -704,7 +687,7 @@ export default function ExamOfficerDashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Results Publication */}
+            {/* Grading Review & Result Publication */}
             <Card className="bg-white border-slate-200/90 shadow-xs hover:border-sky-300 transition-all group">
               <CardContent className="p-5 space-y-3">
                 <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center border border-sky-200/60 group-hover:scale-105 transition-transform">
@@ -712,17 +695,17 @@ export default function ExamOfficerDashboardPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 group-hover:text-sky-700 transition-colors">
-                    Result Publication & Audit
+                    Grading Review & Publication
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Audit finalized instructor scoring, authorize candidate grade publication, adjust marks with audit trails, and export CSVs.
+                    Audit finalized instructor scoring, open exam details to publish results, adjust marks with audit trails, and export CSVs.
                   </p>
                 </div>
                 <Link
-                  href="/exam-officer/results"
+                  href="/exam-officer/grading-review"
                   className="inline-flex items-center text-xs font-semibold text-sky-600 hover:text-sky-700 pt-1"
                 >
-                  Publish & Audit Results <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  Open Grading Review <ArrowRight className="w-3.5 h-3.5 ml-1" />
                 </Link>
               </CardContent>
             </Card>

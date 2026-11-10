@@ -167,12 +167,6 @@ export default function ExamOfficerGradingReviewPage() {
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
-              <Link href="/exam-officer/results">
-                <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white gap-1.5 text-xs shadow-xs">
-                  <Award className="w-4 h-4" />
-                  Results Publication Portal
-                </Button>
-              </Link>
             </div>
           </div>
 
@@ -314,7 +308,7 @@ export default function ExamOfficerGradingReviewPage() {
                         <tr key={exam.id} className="hover:bg-slate-50/70 transition-colors">
                           <td className="py-3.5 px-4 max-w-xs">
                             <Link
-                              href={`/exam-officer/results?examId=${exam.id}`}
+                              href={`/exam-officer/grading-review/${exam.id}`}
                               className="font-semibold text-sky-700 hover:text-sky-900 text-sm line-clamp-1"
                             >
                               {exam.title}
@@ -380,7 +374,7 @@ export default function ExamOfficerGradingReviewPage() {
                           </td>
 
                           <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                            <Link href={`/exam-officer/results?examId=${exam.id}`}>
+                            <Link href={`/exam-officer/grading-review/${exam.id}`}>
                               <Button
                                 size="sm"
                                 className="bg-sky-600 hover:bg-sky-700 text-white text-xs h-8 gap-1.5 shadow-xs"

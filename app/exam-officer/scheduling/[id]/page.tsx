@@ -18,6 +18,8 @@ import {
   ExamRoom,
   RescheduleRequest,
   ScheduleConflict,
+  isSchedulePassedOrClosed,
+  isScheduleReadOnly,
 } from "@/types/schedule";
 import { Student } from "@/types/academic";
 import {
@@ -44,6 +46,8 @@ import {
   FileText,
   AlertCircle,
   HelpCircle,
+  Lock,
+  Award,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -105,6 +109,11 @@ function ScheduleDetailsContent() {
 
       if (schedRes.success && schedRes.data) {
         setSchedule(schedRes.data);
+
+        if (isSchedulePassedOrClosed(schedRes.data)) {
+          router.replace(`/exam-officer/grading-review/${schedRes.data.examinationId}`);
+          return;
+        }
 
         // Prepopulate reschedule form
         const start = new Date(schedRes.data.scheduledStartAt);
@@ -192,6 +201,10 @@ function ScheduleDetailsContent() {
   // Submit Reschedule
   const handleRescheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!schedule || isScheduleReadOnly(schedule)) {
+      toast.error("Closed or cancelled schedules cannot be rescheduled");
+      return;
+    }
     if (!reschedDate || !reschedStartTime || !reschedCloseTime) {
       toast.error("Please fill in required date and time fields");
       return;
@@ -231,6 +244,10 @@ function ScheduleDetailsContent() {
   // Submit Cancel
   const handleCancelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!schedule || isScheduleReadOnly(schedule)) {
+      toast.error("Closed or cancelled schedules cannot be modified");
+      return;
+    }
     try {
       setIsSubmittingCancel(true);
       const res = await scheduleApi.cancelSchedule(scheduleId, cancelReason);
@@ -249,6 +266,10 @@ function ScheduleDetailsContent() {
   // Submit Add Exception
   const handleAddExceptionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!schedule || isScheduleReadOnly(schedule)) {
+      toast.error("Eligibility roster is locked for closed or cancelled schedules");
+      return;
+    }
     if (!selectedStudentId) {
       toast.error("Please select a student");
       return;
@@ -278,6 +299,10 @@ function ScheduleDetailsContent() {
   // Submit Edit Eligibility Status
   const handleEditEligibilitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!schedule || isScheduleReadOnly(schedule)) {
+      toast.error("Eligibility roster is locked for closed or cancelled schedules");
+      return;
+    }
     if (!selectedEligibilityToEdit) return;
 
     try {
@@ -301,6 +326,10 @@ function ScheduleDetailsContent() {
 
   // Remove Student Eligibility
   const handleRemoveEligibility = async (studentId: number, studentName: string) => {
+    if (!schedule || isScheduleReadOnly(schedule)) {
+      toast.error("Eligibility roster is locked for closed or cancelled schedules");
+      return;
+    }
     if (!confirm(`Are you sure you want to remove ${studentName} from this examination schedule?`)) {
       return;
     }
@@ -344,6 +373,8 @@ function ScheduleDetailsContent() {
 
   const startDate = new Date(schedule.scheduledStartAt);
   const closeDate = new Date(schedule.scheduledCloseAt);
+  const isPassed = isSchedulePassedOrClosed(schedule);
+  const isReadOnly = isScheduleReadOnly(schedule);
 
   const getStatusBadge = (status: ScheduleStatus) => {
     switch (status) {
@@ -407,7 +438,7 @@ function ScheduleDetailsContent() {
           </div>
 
           {/* Action buttons */}
-          {schedule.status !== "CANCELLED" && schedule.status !== "COMPLETED" && (
+          {!isReadOnly ? (
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -426,8 +457,49 @@ function ScheduleDetailsContent() {
                 Cancel Schedule
               </Button>
             </div>
+          ) : isPassed ? (
+            <Link href={`/exam-officer/grading-review/${schedule.examinationId}`}>
+              <Button className="gap-2 bg-sky-600 hover:bg-sky-700 text-white">
+                <Award className="w-4 h-4" />
+                Open Grading Review
+              </Button>
+            </Link>
+          ) : (
+            <Badge className="bg-slate-100 text-slate-600 border-slate-200 gap-1.5 py-1.5 px-3">
+              <Lock className="w-3.5 h-3.5" />
+              Read-Only
+            </Badge>
           )}
         </div>
+
+        {/* Locked / Passed Exam Notice Banner */}
+        {isReadOnly && (
+          <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Lock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-amber-900">
+                  {isPassed
+                    ? "Examination Sitting Passed & Closed — Editing Locked"
+                    : "Schedule Cancelled — Editing Locked"}
+                </p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  {isPassed
+                    ? "This examination window has closed. Managing, rescheduling, and roster modifications are disabled. Redirecting to Grading Review..."
+                    : "Cancelled schedules cannot be rescheduled or modified."}
+                </p>
+              </div>
+            </div>
+            {isPassed && (
+              <Link href={`/exam-officer/grading-review/${schedule.examinationId}`}>
+                <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white text-xs gap-1.5 shrink-0">
+                  <Award className="w-3.5 h-3.5" />
+                  Go to Grading Review
+                </Button>
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* Schedule Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -594,13 +666,15 @@ function ScheduleDetailsContent() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setShowAddExceptionModal(true)}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-              >
-                <UserPlus className="w-4 h-4" />
-                Add Student Exception
-              </Button>
+              {!isReadOnly && (
+                <Button
+                  onClick={() => setShowAddExceptionModal(true)}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Add Student Exception
+                </Button>
+              )}
             </div>
           </div>
 
@@ -673,31 +747,38 @@ function ScheduleDetailsContent() {
                         {eligibility.reason || "Enrolled in course offering"}
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50"
-                            onClick={() => {
-                              setSelectedEligibilityToEdit(eligibility);
-                              setEditStatus(eligibility.eligibilityStatus);
-                              setEditReason(eligibility.reason || "");
-                            }}
-                          >
-                            <Edit2 className="w-3.5 h-3.5 mr-1" />
-                            Update
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2 text-rose-600 hover:text-rose-800 hover:bg-rose-50"
-                            onClick={() =>
-                              handleRemoveEligibility(eligibility.studentId, eligibility.studentName)
-                            }
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
+                        {isReadOnly ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400">
+                            <Lock className="w-3.5 h-3.5" />
+                            Locked
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => {
+                                setSelectedEligibilityToEdit(eligibility);
+                                setEditStatus(eligibility.eligibilityStatus);
+                                setEditReason(eligibility.reason || "");
+                              }}
+                            >
+                              <Edit2 className="w-3.5 h-3.5 mr-1" />
+                              Update
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-rose-600 hover:text-rose-800 hover:bg-rose-50"
+                              onClick={() =>
+                                handleRemoveEligibility(eligibility.studentId, eligibility.studentName)
+                              }
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -708,7 +789,7 @@ function ScheduleDetailsContent() {
         </div>
 
         {/* Reschedule Modal */}
-        {showRescheduleModal && (
+        {!isReadOnly && showRescheduleModal && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -871,7 +952,7 @@ function ScheduleDetailsContent() {
         )}
 
         {/* Cancel Schedule Modal */}
-        {showCancelModal && (
+        {!isReadOnly && showCancelModal && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-rose-50/50">
@@ -931,7 +1012,7 @@ function ScheduleDetailsContent() {
         )}
 
         {/* Add Student Exception Modal */}
-        {showAddExceptionModal && (
+        {!isReadOnly && showAddExceptionModal && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -1018,7 +1099,7 @@ function ScheduleDetailsContent() {
         )}
 
         {/* Update Eligibility Modal */}
-        {selectedEligibilityToEdit && (
+        {!isReadOnly && selectedEligibilityToEdit && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">

@@ -16,6 +16,7 @@ import {
   ExamRoom,
   CreateScheduleRequest,
   ScheduleConflict,
+  isSchedulePassedOrClosed,
 } from "@/types/schedule";
 import { Examination } from "@/types/exam";
 import { CourseOffering } from "@/types/academic";
@@ -36,6 +37,7 @@ import {
   X,
   Building,
   ShieldCheck,
+  Award,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -445,74 +447,109 @@ function ExamOfficerSchedulingContent() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
-                        {displayedSchedules.map((s) => (
-                          <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
-                            <td className="py-3.5 px-4 max-w-xs">
-                              <Link
-                                href={`/exam-officer/scheduling/${s.id}`}
-                                className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-1"
-                              >
-                                {s.examinationTitle}
-                              </Link>
-                              <span className="text-[11px] text-slate-500 block">
-                                Total: {s.totalMarks} Marks (Pass: {s.passingMarks})
-                              </span>
-                            </td>
+                        {displayedSchedules.map((s) => {
+                          const passed = isSchedulePassedOrClosed(s);
+                          const rowHref = passed
+                            ? `/exam-officer/grading-review/${s.examinationId}`
+                            : `/exam-officer/scheduling/${s.id}`;
 
-                            <td className="py-3.5 px-4 whitespace-nowrap">
-                              <div className="font-medium text-slate-800">
-                                {s.courseCode} - {s.courseName}
-                              </div>
-                              <div className="text-[11px] text-slate-500">
-                                Sec {s.section || "A"} &bull; {s.semesterName || "Fall 2025"}
-                              </div>
-                            </td>
+                          return (
+                            <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="py-3.5 px-4 max-w-xs">
+                                <Link
+                                  href={rowHref}
+                                  className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-1"
+                                >
+                                  {s.examinationTitle}
+                                </Link>
+                                <span className="text-[11px] text-slate-500 block">
+                                  Total: {s.totalMarks} Marks (Pass: {s.passingMarks})
+                                </span>
+                              </td>
 
-                            <td className="py-3.5 px-4 whitespace-nowrap">
-                              <div className="font-semibold text-slate-800">
-                                {new Date(s.scheduledStartAt).toLocaleDateString([], {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                })}
-                              </div>
-                              <div className="text-[11px] text-slate-500">
-                                {new Date(s.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                {" - "}
-                                {new Date(s.scheduledCloseAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </div>
-                            </td>
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <div className="font-medium text-slate-800">
+                                  {s.courseCode} - {s.courseName}
+                                </div>
+                                <div className="text-[11px] text-slate-500">
+                                  Sec {s.section || "A"} &bull; {s.semesterName || "Fall 2025"}
+                                </div>
+                              </td>
 
-                            <td className="py-3.5 px-4 whitespace-nowrap">
-                              <div className="flex items-center gap-1.5 font-medium text-slate-700">
-                                <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                {s.durationMinutes} mins
-                              </div>
-                              <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                                <MapPin className="h-3 w-3 text-slate-400" />
-                                {s.roomName || "Online Exam"}
-                              </div>
-                            </td>
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <div className="font-semibold text-slate-800">
+                                  {new Date(s.scheduledStartAt).toLocaleDateString([], {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
+                                </div>
+                                <div className="text-[11px] text-slate-500">
+                                  {new Date(s.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  {" - "}
+                                  {new Date(s.scheduledCloseAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                              </td>
 
-                            <td className="py-3.5 px-4 whitespace-nowrap">
-                              <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                                <Users className="h-3.5 w-3.5 text-sky-600" />
-                                {s.eligibleStudentCount} Students
-                              </div>
-                            </td>
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                  {s.durationMinutes} mins
+                                </div>
+                                <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                                  <MapPin className="h-3 w-3 text-slate-400" />
+                                  {s.roomName || "Online Exam"}
+                                </div>
+                              </td>
 
-                            <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(s.status)}</td>
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                                  <Users className="h-3.5 w-3.5 text-sky-600" />
+                                  {s.eligibleStudentCount} Students
+                                </div>
+                              </td>
 
-                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                              <Link href={`/exam-officer/scheduling/${s.id}`}>
-                                <Button variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600">
-                                  <Eye className="h-3.5 w-3.5" />
-                                  Manage
-                                </Button>
-                              </Link>
-                            </td>
-                          </tr>
-                        ))}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                {s.status !== "COMPLETED" && passed ? (
+                                  <Badge className="bg-slate-500/10 text-slate-600 border-slate-500/20">
+                                    Closed
+                                  </Badge>
+                                ) : (
+                                  getStatusBadge(s.status)
+                                )}
+                              </td>
+
+                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                {passed ? (
+                                  <Link href={`/exam-officer/grading-review/${s.examinationId}`}>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-xs gap-1.5 text-sky-700 border-sky-200 hover:bg-sky-50"
+                                    >
+                                      <Award className="h-3.5 w-3.5" />
+                                      Grading Review
+                                    </Button>
+                                  </Link>
+                                ) : s.status === "CANCELLED" ? (
+                                  <Link href={`/exam-officer/scheduling/${s.id}`}>
+                                    <Button variant="outline" size="sm" className="text-xs gap-1.5 text-slate-500">
+                                      <Eye className="h-3.5 w-3.5" />
+                                      View
+                                    </Button>
+                                  </Link>
+                                ) : (
+                                  <Link href={`/exam-officer/scheduling/${s.id}`}>
+                                    <Button variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600">
+                                      <Eye className="h-3.5 w-3.5" />
+                                      Manage
+                                    </Button>
+                                  </Link>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

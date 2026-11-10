@@ -55,10 +55,8 @@ export function Sidebar() {
     { label: "Academic Offerings", href: "/exam-officer/academic", icon: BookOpen },
     { label: "Exam Approvals", href: "/exam-officer/approvals", icon: ClipboardCheck },
     { label: "Exam Scheduling", href: "/exam-officer/scheduling", icon: CalendarClock },
-    { label: "Student Eligibility", href: "/exam-officer/eligibility", icon: UserCheck },
     { label: "Live Monitoring", href: "/exam-officer/monitoring", icon: Clock },
     { label: "Grading Review", href: "/exam-officer/grading-review", icon: CheckCircle2 },
-    { label: "Result Publication", href: "/exam-officer/results", icon: Award },
   ];
 
   const instructorNav: NavItem[] = [
