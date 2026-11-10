@@ -88,23 +88,7 @@ export default function ExamOfficerApprovalsPage() {
   return (
     <DashboardShell>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                <ClipboardCheck className="w-3.5 h-3.5 text-sky-600" />
-                Examination Governance
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
-              Examination Approvals Queue
-            </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Audit submitted examinations, inspect question distributions, verify marks, and grant scheduling approvals.
-            </p>
-          </div>
-        </div>
+       
 
         {/* Status Navigation Tabs */}
         <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">

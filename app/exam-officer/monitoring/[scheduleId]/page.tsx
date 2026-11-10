@@ -16,6 +16,9 @@ import {
   CandidateMonitoring,
   MonitoringEvent,
   MonitoringWebSocketMessage,
+  isMonitoringSessionReadOnly,
+  isCandidateActiveStatus,
+  isCandidateSubmittedStatus,
 } from "@/types/monitoring";
 import { toast } from "sonner";
 import {
@@ -34,6 +37,8 @@ import {
   HelpCircle,
   ShieldAlert,
   Search,
+  History,
+  Lock,
 } from "lucide-react";
 
 function LiveMonitoringContent() {
@@ -46,6 +51,7 @@ function LiveMonitoringContent() {
   const [events, setEvents] = useState<MonitoringEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<WebSocketConnectionStatus>("DISCONNECTED");
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   // Filter & Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,12 +81,17 @@ function LiveMonitoringContent() {
   }, [scheduleId]);
 
   useEffect(() => {
+    setNowMs(Date.now());
     loadSnapshot();
+    const timer = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(timer);
   }, [loadSnapshot]);
 
-  // STOMP WebSocket Live Subscription & Reconnect Reconciliation
+  const isReadOnly = snapshot ? isMonitoringSessionReadOnly(snapshot, nowMs) : false;
+
+  // STOMP WebSocket Live Subscription & Reconnect Reconciliation (disabled for passed/closed history sessions)
   useEffect(() => {
-    if (!scheduleId || isNaN(scheduleId)) return;
+    if (!scheduleId || isNaN(scheduleId) || !snapshot || isReadOnly) return;
 
     const unsubscribeStatus = stompManager.onStatusChange((status) => {
       setConnectionStatus(status);
@@ -149,16 +160,25 @@ function LiveMonitoringContent() {
       unsubscribeStatus();
       if (cleanupSub) cleanupSub();
     };
-  }, [scheduleId, loadSnapshot]);
+  }, [scheduleId, loadSnapshot, snapshot, isReadOnly]);
 
   // Calculate live counters
   const totalEligible = snapshot?.totalEligibleStudents || candidates.length;
   const startedCount = candidates.filter((c) => c.status !== "NOT_STARTED").length;
   const notStartedCount = Math.max(0, totalEligible - startedCount);
-  const activeCount = candidates.filter((c) => c.status === "IN_PROGRESS").length;
-  const submittedCount = candidates.filter((c) => c.status === "SUBMITTED").length;
+  const activeCount =
+    candidates.length > 0
+      ? candidates.filter((c) => isCandidateActiveStatus(c.status)).length
+      : snapshot?.activeAttemptsCount ?? 0;
+  const submittedCount =
+    candidates.length > 0
+      ? candidates.filter((c) => isCandidateSubmittedStatus(c.status)).length
+      : snapshot?.submittedCount ?? 0;
   const disconnectedCount = candidates.filter(
-    (c) => c.status === "IN_PROGRESS" && !c.isOnline
+    (c) =>
+      (isCandidateActiveStatus(c.status) && !c.isOnline) ||
+      c.status === "CONNECTION_PAUSED" ||
+      c.status === "RESUME_REQUIRED"
   ).length;
 
   // Filter candidates
@@ -169,27 +189,39 @@ function LiveMonitoringContent() {
 
     if (!matchesSearch) return false;
 
-    if (statusFilter === "IN_PROGRESS") return c.status === "IN_PROGRESS";
-    if (statusFilter === "SUBMITTED") return c.status === "SUBMITTED";
+    if (statusFilter === "ACTIVE") return isCandidateActiveStatus(c.status);
+    if (statusFilter === "SUBMITTED") return isCandidateSubmittedStatus(c.status);
     if (statusFilter === "NOT_STARTED") return c.status === "NOT_STARTED";
-    if (statusFilter === "DISCONNECTED") return c.status === "IN_PROGRESS" && !c.isOnline;
-    return true;
-  });
-
-  // Filter events
-  const filteredEvents = events.filter((ev) => {
-    if (eventFilter === "ALERTS") {
+    if (statusFilter === "DISCONNECTED") {
       return (
-        ev.eventType === "TAB_BLUR" ||
-        ev.eventType === "WINDOW_RESIZED" ||
-        ev.eventType === "DISCONNECTED"
+        (isCandidateActiveStatus(c.status) && !c.isOnline) ||
+        c.status === "CONNECTION_PAUSED" ||
+        c.status === "RESUME_REQUIRED"
       );
     }
     return true;
   });
 
+  // Filter events
+  const ALERT_EVENT_TYPES = new Set([
+    "TAB_BLUR",
+    "WINDOW_RESIZED",
+    "DISCONNECTED",
+    "CONNECTION_PAUSED",
+    "PASSCODE_FAILED",
+    "HEARTBEAT_TIMEOUT",
+    "RATE_LIMIT_EXCEEDED",
+  ]);
+  const filteredEvents = events.filter((ev) =>
+    eventFilter === "ALERTS" ? ALERT_EVENT_TYPES.has(ev.eventType) : true
+  );
+
   const handleSendAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (snapshot && isMonitoringSessionReadOnly(snapshot, Date.now())) {
+      toast.error("Cannot send announcements for a closed examination session");
+      return;
+    }
     if (!announceTitle.trim() || !announceMessage.trim()) return;
 
     setSendingAnnounce(true);
@@ -210,25 +242,77 @@ function LiveMonitoringContent() {
     }
   };
 
-  const getEventBadgeClass = (type: string) => {
-    switch (type) {
-      case "STARTED":
-      case "RECONNECTED":
-        return "bg-blue-50 text-blue-700 border-blue-200";
-      case "ANSWER_SAVED":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200";
-      case "SUBMITTED":
-        return "bg-purple-50 text-purple-700 border-purple-200";
-      case "TAB_BLUR":
-      case "WINDOW_RESIZED":
-        return "bg-amber-50 text-amber-700 border-amber-200 font-bold";
-      case "DISCONNECTED":
-        return "bg-red-50 text-red-700 border-red-200 font-bold";
-      case "AUTO_SUBMITTED_EXPIRED":
-        return "bg-slate-100 text-slate-700 border-slate-200";
-      default:
-        return "bg-slate-50 text-slate-600 border-slate-200";
-    }
+  const EVENT_BADGE_MAP: Record<string, string> = {
+    STARTED: "bg-blue-50 text-blue-700 border-blue-200",
+    RECONNECTED: "bg-blue-50 text-blue-700 border-blue-200",
+    CONNECTION_RESUMED: "bg-blue-50 text-blue-700 border-blue-200",
+    PASSCODE_VERIFIED: "bg-blue-50 text-blue-700 border-blue-200",
+    ANSWER_SAVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    QUESTION_FLAGGED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    SUBMITTED: "bg-purple-50 text-purple-700 border-purple-200",
+    AUTO_SUBMITTED: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    AUTO_SUBMITTED_EXPIRED: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    TAB_BLUR: "bg-amber-50 text-amber-700 border-amber-200 font-bold",
+    WINDOW_RESIZED: "bg-amber-50 text-amber-700 border-amber-200 font-bold",
+    CONNECTION_PAUSED: "bg-amber-50 text-amber-700 border-amber-200 font-bold",
+    DISCONNECTED: "bg-red-50 text-red-700 border-red-200 font-bold",
+    PASSCODE_FAILED: "bg-red-50 text-red-700 border-red-200 font-bold",
+    HEARTBEAT_TIMEOUT: "bg-red-50 text-red-700 border-red-200 font-bold",
+    RATE_LIMIT_EXCEEDED: "bg-red-50 text-red-700 border-red-200 font-bold",
+  };
+
+  const getEventBadgeClass = (type: string) =>
+    EVENT_BADGE_MAP[type] || "bg-slate-50 text-slate-600 border-slate-200";
+
+  const CANDIDATE_STATUS_STYLES: Record<string, { label: string; className: string }> = {
+    ACTIVE: {
+      label: "ACTIVE",
+      className: "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold",
+    },
+    IN_PROGRESS: {
+      label: "IN PROGRESS",
+      className: "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold",
+    },
+    CONNECTION_PAUSED: {
+      label: "PAUSED",
+      className: "bg-amber-50 text-amber-700 border border-amber-200 font-bold",
+    },
+    RESUME_REQUIRED: {
+      label: "RESUME REQ",
+      className: "bg-amber-50 text-amber-700 border border-amber-200 font-bold",
+    },
+    SUBMITTED: {
+      label: "SUBMITTED",
+      className: "bg-purple-50 text-purple-700 border border-purple-200 font-bold",
+    },
+    AUTO_SUBMITTED: {
+      label: "AUTO SUBMITTED",
+      className: "bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold",
+    },
+    EXPIRED: {
+      label: "EXPIRED",
+      className: "bg-rose-50 text-rose-700 border border-rose-200 font-semibold",
+    },
+    ABANDONED: {
+      label: "ABANDONED",
+      className: "bg-red-50 text-red-700 border border-red-200 font-semibold",
+    },
+    NOT_STARTED: {
+      label: "NOT STARTED",
+      className: "bg-slate-100 text-slate-600 font-medium",
+    },
+  };
+
+  const renderCandidateStatusBadge = (status: string) => {
+    const config = CANDIDATE_STATUS_STYLES[status] || {
+      label: status.replace(/_/g, " "),
+      className: "bg-slate-100 text-slate-600 font-medium",
+    };
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${config.className}`}>
+        {config.label}
+      </span>
+    );
   };
 
   const formatTime = (timeStr?: string | null) => {
@@ -283,28 +367,35 @@ function LiveMonitoringContent() {
               </div>
             </div>
 
-            {/* Live Status Pill & Announcement Trigger */}
+            {/* Live Status Pill / Read-Only History Pill & Announcement Trigger */}
             <div className="flex items-center gap-2.5">
-              <div
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                  connectionStatus === "CONNECTED"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-amber-50 text-amber-700 border-amber-200"
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
+              {isReadOnly ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-700 border-slate-200">
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  <span>History Mode (Read-Only)</span>
+                </div>
+              ) : (
+                <div
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
                     connectionStatus === "CONNECTED"
-                      ? "bg-emerald-500 animate-pulse"
-                      : "bg-amber-500"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
                   }`}
-                />
-                <span>
-                  {connectionStatus === "CONNECTED"
-                    ? "Live Telemetry Connected"
-                    : `Reconnecting (${connectionStatus})...`}
-                </span>
-              </div>
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      connectionStatus === "CONNECTED"
+                        ? "bg-emerald-500 animate-pulse"
+                        : "bg-amber-500"
+                    }`}
+                  />
+                  <span>
+                    {connectionStatus === "CONNECTED"
+                      ? "Live Telemetry Connected"
+                      : `Reconnecting (${connectionStatus})...`}
+                  </span>
+                </div>
+              )}
 
               <Button
                 size="sm"
@@ -315,16 +406,32 @@ function LiveMonitoringContent() {
                 <RefreshCw className="w-3.5 h-3.5" />
               </Button>
 
-              <Button
-                size="sm"
-                onClick={() => setIsAnnounceModalOpen(true)}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs"
-              >
-                <Megaphone className="w-3.5 h-3.5 mr-1.5" />
-                Live Broadcast
-              </Button>
+              {!isReadOnly && (
+                <Button
+                  size="sm"
+                  onClick={() => setIsAnnounceModalOpen(true)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs"
+                >
+                  <Megaphone className="w-3.5 h-3.5 mr-1.5" />
+                  Live Broadcast
+                </Button>
+              )}
             </div>
           </div>
+
+          {isReadOnly && (
+            <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-3">
+              <History className="w-5 h-5 text-slate-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                  Sitting Ended — Viewing Proctoring History (Read-Only)
+                </p>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  This examination window has closed. Candidate progress, attendance, and proctoring events are preserved for audit review; live broadcasts and modifications are disabled.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* 6 Real-Time Telemetry Counters */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -351,7 +458,9 @@ function LiveMonitoringContent() {
 
             <Card className="p-3.5 bg-white border-emerald-300 shadow-xs bg-emerald-50/20">
               <p className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                {!isReadOnly && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                )}
                 Active Sitting
               </p>
               <p className="text-xl font-bold text-emerald-700 mt-1">{activeCount}</p>
@@ -390,18 +499,24 @@ function LiveMonitoringContent() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    {["ALL", "IN_PROGRESS", "SUBMITTED", "NOT_STARTED", "DISCONNECTED"].map((tab) => (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[
+                      { key: "ALL", label: "ALL" },
+                      { key: "ACTIVE", label: "ACTIVE" },
+                      { key: "SUBMITTED", label: "SUBMITTED" },
+                      { key: "NOT_STARTED", label: "NOT STARTED" },
+                      { key: "DISCONNECTED", label: "DISCONNECTED" },
+                    ].map((tab) => (
                       <button
-                        key={tab}
-                        onClick={() => setStatusFilter(tab)}
+                        key={tab.key}
+                        onClick={() => setStatusFilter(tab.key)}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                          statusFilter === tab
+                          statusFilter === tab.key
                             ? "bg-sky-600 text-white shadow-xs"
                             : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
                         }`}
                       >
-                        {tab.replace("_", " ")}
+                        {tab.label}
                       </button>
                     ))}
                   </div>
@@ -439,18 +554,20 @@ function LiveMonitoringContent() {
                                 <div className="flex items-center gap-2">
                                   <span
                                     className={`w-2 h-2 rounded-full shrink-0 ${
-                                      c.status === "SUBMITTED"
+                                      isCandidateSubmittedStatus(c.status)
                                         ? "bg-purple-500"
-                                        : c.isOnline
+                                        : c.isOnline && isCandidateActiveStatus(c.status)
                                         ? "bg-emerald-500 animate-pulse"
-                                        : c.status === "IN_PROGRESS"
+                                        : isCandidateActiveStatus(c.status)
                                         ? "bg-amber-500"
                                         : "bg-slate-300"
                                     }`}
                                     title={
-                                      c.isOnline
+                                      isCandidateSubmittedStatus(c.status)
+                                        ? "Submitted"
+                                        : c.isOnline && isCandidateActiveStatus(c.status)
                                         ? "Candidate Online"
-                                        : c.status === "IN_PROGRESS"
+                                        : isCandidateActiveStatus(c.status)
                                         ? "Inactive / Disconnected"
                                         : "Offline"
                                     }
@@ -467,19 +584,7 @@ function LiveMonitoringContent() {
                               </td>
 
                               <td className="py-3 px-3">
-                                {c.status === "IN_PROGRESS" ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    IN PROGRESS
-                                  </span>
-                                ) : c.status === "SUBMITTED" ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                                    SUBMITTED
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
-                                    NOT STARTED
-                                  </span>
-                                )}
+                                {renderCandidateStatusBadge(c.status)}
                               </td>
 
                               <td className="py-3 px-3 min-w-32">
@@ -497,7 +602,13 @@ function LiveMonitoringContent() {
 
                               <td className="py-3 px-3 text-[11px] text-slate-600">
                                 <p>Start: {formatTime(c.startedAt)}</p>
-                                <p className="text-slate-400">Due: {formatTime(c.deadlineAt)}</p>
+                                {c.deadlineAt ? (
+                                  <p className="text-slate-400">Due: {formatTime(c.deadlineAt)}</p>
+                                ) : c.lastActivityAt ? (
+                                  <p className="text-slate-400">Event: {formatTime(c.lastActivityAt)}</p>
+                                ) : (
+                                  <p className="text-slate-400">Due: —</p>
+                                )}
                               </td>
 
                               <td className="py-3 px-3">
@@ -527,9 +638,13 @@ function LiveMonitoringContent() {
               <Card className="border-slate-200 shadow-xs bg-white overflow-hidden">
                 <div className="p-3.5 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+                    {isReadOnly ? (
+                      <History className="w-4 h-4 text-slate-600" />
+                    ) : (
+                      <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+                    )}
                     <h3 className="font-semibold text-slate-800 text-xs">
-                      Live Proctoring Feed
+                      {isReadOnly ? "Proctoring Event History" : "Live Proctoring Feed"}
                     </h3>
                   </div>
 
@@ -603,7 +718,7 @@ function LiveMonitoringContent() {
           </div>
 
           {/* Live Announcement Modal */}
-          {isAnnounceModalOpen && (
+          {!isReadOnly && isAnnounceModalOpen && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in-50">
               <Card className="w-full max-w-md bg-white p-6 shadow-2xl border-slate-200">
                 <div className="flex items-center gap-2 mb-4">

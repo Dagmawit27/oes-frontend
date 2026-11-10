@@ -343,12 +343,12 @@ export function InteractiveExamCalendar({
         </div>
 
         {/* Filter Mode Controls: Single Day / Range (e.g. 5 - 10) / All / Today */}
-        <div className="flex items-center justify-between gap-2 pb-1">
-          <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+        <div className="flex items-center justify-between gap-1.5 pb-1">
+          <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold whitespace-nowrap">
             <button
               type="button"
               onClick={() => handleModeSwitch("single")}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
                 filter.mode === "single"
                   ? "bg-white text-emerald-700 shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -359,7 +359,7 @@ export function InteractiveExamCalendar({
             <button
               type="button"
               onClick={() => handleModeSwitch("range")}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
                 filter.mode === "range"
                   ? "bg-white text-emerald-700 shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -370,7 +370,7 @@ export function InteractiveExamCalendar({
             <button
               type="button"
               onClick={() => handleModeSwitch("all")}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
                 filter.mode === "all"
                   ? "bg-white text-emerald-700 shadow-2xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -383,7 +383,7 @@ export function InteractiveExamCalendar({
           <button
             type="button"
             onClick={handleTodayClick}
-            className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 px-2 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 transition-colors"
+            className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 transition-colors whitespace-nowrap shrink-0"
           >
             Today
           </button>

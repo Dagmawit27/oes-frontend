@@ -185,23 +185,26 @@ export interface ScheduleConflict {
 
 /**
  * Returns true when an examination schedule has completed or its closing window has already passed.
+ * Accepts an optional client-side timestamp (`nowMs`) to remain SSR/prerender-safe.
  * Cancelled sittings return false because they were not held/completed.
  */
 export function isSchedulePassedOrClosed(
-  schedule: Pick<ExamSchedule, "status" | "scheduledCloseAt">
+  schedule: Pick<ExamSchedule, "status" | "scheduledCloseAt">,
+  nowMs?: number | null
 ): boolean {
   if (schedule.status === "COMPLETED") return true;
   if (schedule.status === "CANCELLED") return false;
-  if (!schedule.scheduledCloseAt) return false;
+  if (!schedule.scheduledCloseAt || typeof nowMs !== "number") return false;
   const closeMs = new Date(schedule.scheduledCloseAt).getTime();
-  return !Number.isNaN(closeMs) && closeMs <= Date.now();
+  return !Number.isNaN(closeMs) && closeMs <= nowMs;
 }
 
 /**
  * Returns true when a schedule may no longer be modified (either passed/closed or cancelled).
  */
 export function isScheduleReadOnly(
-  schedule: Pick<ExamSchedule, "status" | "scheduledCloseAt">
+  schedule: Pick<ExamSchedule, "status" | "scheduledCloseAt">,
+  nowMs?: number | null
 ): boolean {
-  return schedule.status === "CANCELLED" || isSchedulePassedOrClosed(schedule);
+  return schedule.status === "CANCELLED" || isSchedulePassedOrClosed(schedule, nowMs);
 }

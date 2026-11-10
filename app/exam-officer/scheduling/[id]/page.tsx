@@ -96,6 +96,7 @@ function ScheduleDetailsContent() {
   const [editStatus, setEditStatus] = useState<EligibilityStatus>("ELIGIBLE");
   const [editReason, setEditReason] = useState("");
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   const loadData = async () => {
     if (!scheduleId) return;
@@ -109,8 +110,10 @@ function ScheduleDetailsContent() {
 
       if (schedRes.success && schedRes.data) {
         setSchedule(schedRes.data);
+        const currentMs = Date.now();
+        setNowMs(currentMs);
 
-        if (isSchedulePassedOrClosed(schedRes.data)) {
+        if (isSchedulePassedOrClosed(schedRes.data, currentMs)) {
           router.replace(`/exam-officer/grading-review/${schedRes.data.examinationId}`);
           return;
         }
@@ -201,7 +204,7 @@ function ScheduleDetailsContent() {
   // Submit Reschedule
   const handleRescheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schedule || isScheduleReadOnly(schedule)) {
+    if (!schedule || isScheduleReadOnly(schedule, Date.now())) {
       toast.error("Closed or cancelled schedules cannot be rescheduled");
       return;
     }
@@ -244,7 +247,7 @@ function ScheduleDetailsContent() {
   // Submit Cancel
   const handleCancelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schedule || isScheduleReadOnly(schedule)) {
+    if (!schedule || isScheduleReadOnly(schedule, Date.now())) {
       toast.error("Closed or cancelled schedules cannot be modified");
       return;
     }
@@ -266,7 +269,7 @@ function ScheduleDetailsContent() {
   // Submit Add Exception
   const handleAddExceptionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schedule || isScheduleReadOnly(schedule)) {
+    if (!schedule || isScheduleReadOnly(schedule, Date.now())) {
       toast.error("Eligibility roster is locked for closed or cancelled schedules");
       return;
     }
@@ -299,7 +302,7 @@ function ScheduleDetailsContent() {
   // Submit Edit Eligibility Status
   const handleEditEligibilitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schedule || isScheduleReadOnly(schedule)) {
+    if (!schedule || isScheduleReadOnly(schedule, Date.now())) {
       toast.error("Eligibility roster is locked for closed or cancelled schedules");
       return;
     }
@@ -326,7 +329,7 @@ function ScheduleDetailsContent() {
 
   // Remove Student Eligibility
   const handleRemoveEligibility = async (studentId: number, studentName: string) => {
-    if (!schedule || isScheduleReadOnly(schedule)) {
+    if (!schedule || isScheduleReadOnly(schedule, Date.now())) {
       toast.error("Eligibility roster is locked for closed or cancelled schedules");
       return;
     }
@@ -373,8 +376,8 @@ function ScheduleDetailsContent() {
 
   const startDate = new Date(schedule.scheduledStartAt);
   const closeDate = new Date(schedule.scheduledCloseAt);
-  const isPassed = isSchedulePassedOrClosed(schedule);
-  const isReadOnly = isScheduleReadOnly(schedule);
+  const isPassed = isSchedulePassedOrClosed(schedule, nowMs);
+  const isReadOnly = isScheduleReadOnly(schedule, nowMs);
 
   const getStatusBadge = (status: ScheduleStatus) => {
     switch (status) {

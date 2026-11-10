@@ -73,6 +73,7 @@ const offeringsChartConfig = {
 
 export default function ExamOfficerDashboardPage() {
   const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState<number | null>(null);
   const [pendingExams, setPendingExams] = useState<Examination[]>([]);
   const [pendingTotalCount, setPendingTotalCount] = useState(0);
   const [allExams, setAllExams] = useState<Examination[]>([]);
@@ -124,6 +125,7 @@ export default function ExamOfficerDashboardPage() {
   };
 
   useEffect(() => {
+    setNowMs(Date.now());
     loadDashboardData();
   }, []);
 
@@ -530,7 +532,7 @@ export default function ExamOfficerDashboardPage() {
               ) : (
                 <div className="divide-y divide-slate-100">
                   {upcomingSchedules.slice(0, 5).map((sched) => {
-                    const passed = isSchedulePassedOrClosed(sched);
+                    const passed = isSchedulePassedOrClosed(sched, nowMs);
                     const targetHref = passed
                       ? `/exam-officer/grading-review/${sched.examinationId}`
                       : `/exam-officer/scheduling/${sched.id}`;

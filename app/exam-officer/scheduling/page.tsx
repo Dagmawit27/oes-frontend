@@ -54,6 +54,7 @@ function ExamOfficerSchedulingContent() {
   const [rooms, setRooms] = useState<ExamRoom[]>([]);
   const [offerings, setOfferings] = useState<CourseOffering[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   // Calendar filter state: defaults to Current Day (today) on mount
   const [todayKey, setTodayKey] = useState<string>("2026-11-10");
@@ -64,6 +65,7 @@ function ExamOfficerSchedulingContent() {
   });
 
   useEffect(() => {
+    setNowMs(Date.now());
     const nowKey = toLocalDateKey(new Date());
     setTodayKey(nowKey);
     setDateFilter({
@@ -307,9 +309,9 @@ function ExamOfficerSchedulingContent() {
         </div>
 
         {/* 2-Column Layout: Left = Scheduled Exams List, Right = Search + Month Calendar */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-          {/* LEFT COLUMN (Main): Scheduled Exams List (replaced hourly timeline table) */}
-          <div className="xl:col-span-3 space-y-4">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* LEFT COLUMN (Main): Scheduled Exams List */}
+          <div className="flex-1 min-w-0 w-full space-y-4">
             {/* Filter Status & Dropdown Bar */}
             <Card className="border border-slate-200 shadow-xs bg-white">
               <CardContent className="p-4 space-y-3">
@@ -437,46 +439,44 @@ function ExamOfficerSchedulingContent() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                          <th className="py-3 px-4">Examination</th>
-                          <th className="py-3 px-4">Course & Section</th>
-                          <th className="py-3 px-4">Scheduled Window</th>
-                          <th className="py-3 px-4">Duration & Room</th>
-                          <th className="py-3 px-4">Eligible Students</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
+                          <th className="py-3 px-3.5">Examination</th>
+                          <th className="py-3 px-3.5">Schedule &amp; Venue</th>
+                          <th className="py-3 px-3.5 text-center">Eligible</th>
+                          <th className="py-3 px-3.5">Status</th>
+                          <th className="py-3 px-3.5 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs">
                         {displayedSchedules.map((s) => {
-                          const passed = isSchedulePassedOrClosed(s);
+                          const passed = isSchedulePassedOrClosed(s, nowMs);
                           const rowHref = passed
                             ? `/exam-officer/grading-review/${s.examinationId}`
                             : `/exam-officer/scheduling/${s.id}`;
 
                           return (
                             <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
-                              <td className="py-3.5 px-4 max-w-xs">
+                              <td className="py-3 px-3.5 min-w-[210px] max-w-[300px]">
                                 <Link
                                   href={rowHref}
-                                  className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-1"
+                                  className="font-semibold text-sky-700 hover:text-sky-900 line-clamp-2"
                                 >
                                   {s.examinationTitle}
                                 </Link>
-                                <span className="text-[11px] text-slate-500 block">
-                                  Total: {s.totalMarks} Marks (Pass: {s.passingMarks})
-                                </span>
-                              </td>
-
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <div className="font-medium text-slate-800">
+                                <div className="text-[11px] font-medium text-slate-700 mt-0.5 line-clamp-1">
                                   {s.courseCode} - {s.courseName}
                                 </div>
-                                <div className="text-[11px] text-slate-500">
-                                  Sec {s.section || "A"} &bull; {s.semesterName || "Fall 2025"}
+                                <div className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">
+                                  <span>
+                                    Sec {s.section || "A"} &bull; {s.semesterName || "Fall 2025"}
+                                  </span>
+                                  <span>&bull;</span>
+                                  <span>
+                                    {s.totalMarks} Marks (Pass: {s.passingMarks})
+                                  </span>
                                 </div>
                               </td>
 
-                              <td className="py-3.5 px-4 whitespace-nowrap">
+                              <td className="py-3 px-3.5 whitespace-nowrap">
                                 <div className="font-semibold text-slate-800">
                                   {new Date(s.scheduledStartAt).toLocaleDateString([], {
                                     month: "short",
@@ -484,32 +484,33 @@ function ExamOfficerSchedulingContent() {
                                     year: "numeric",
                                   })}
                                 </div>
-                                <div className="text-[11px] text-slate-500">
+                                <div className="text-[11px] text-slate-600 mt-0.5">
                                   {new Date(s.scheduledStartAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                   {" - "}
                                   {new Date(s.scheduledCloseAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                 </div>
+                                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1">
+                                    <Clock className="h-3 w-3 text-slate-400" />
+                                    {s.durationMinutes} mins
+                                  </span>
+                                  <span>&bull;</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <MapPin className="h-3 w-3 text-slate-400" />
+                                    {s.roomName || "Online Exam"}
+                                  </span>
+                                </div>
                               </td>
 
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <div className="flex items-center gap-1.5 font-medium text-slate-700">
-                                  <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                  {s.durationMinutes} mins
-                                </div>
-                                <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                                  <MapPin className="h-3 w-3 text-slate-400" />
-                                  {s.roomName || "Online Exam"}
-                                </div>
-                              </td>
-
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                              <td className="py-3 px-3.5 whitespace-nowrap text-center">
+                                <div className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
                                   <Users className="h-3.5 w-3.5 text-sky-600" />
-                                  {s.eligibleStudentCount} Students
+                                  {s.eligibleStudentCount}{" "}
+                                  {s.eligibleStudentCount === 1 ? "Student" : "Students"}
                                 </div>
                               </td>
 
-                              <td className="py-3.5 px-4 whitespace-nowrap">
+                              <td className="py-3 px-3.5 whitespace-nowrap">
                                 {s.status !== "COMPLETED" && passed ? (
                                   <Badge className="bg-slate-500/10 text-slate-600 border-slate-500/20">
                                     Closed
@@ -519,7 +520,7 @@ function ExamOfficerSchedulingContent() {
                                 )}
                               </td>
 
-                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              <td className="py-3 px-3.5 text-right whitespace-nowrap">
                                 {passed ? (
                                   <Link href={`/exam-officer/grading-review/${s.examinationId}`}>
                                     <Button
@@ -558,8 +559,8 @@ function ExamOfficerSchedulingContent() {
             )}
           </div>
 
-          {/* RIGHT COLUMN (Sidebar): Search Input + Month Calendar (kept in same place!) */}
-          <div className="xl:col-span-1 space-y-4">
+          {/* RIGHT COLUMN (Sidebar): Search Input + Month Calendar */}
+          <div className="w-full lg:w-[300px] xl:w-[320px] shrink-0 space-y-4">
             {/* Search Input */}
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />

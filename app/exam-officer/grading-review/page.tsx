@@ -139,125 +139,9 @@ export default function ExamOfficerGradingReviewPage() {
     <ProtectedRoute allowedRoles={["ROLE_EXAM_OFFICER", "ROLE_ADMIN"]}>
       <DashboardShell>
         <div className="space-y-6 max-w-7xl mx-auto pb-12">
-          {/* Top Header Card */}
-          <div className="bg-white border border-slate-200/90 p-6 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />
-                  Academic Quality Assurance
-                </span>
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
-                Grading Review & Quality Audit
-              </h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Audit instructor manual grading progress, inspect score distributions, and verify ready examination batches before publication.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadData}
-                disabled={loading}
-                className="border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5 text-xs"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
-            </div>
-          </div>
-
-          {/* Metric Overview Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-white border-slate-200/90 shadow-xs">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center border border-sky-200/60">
-                  <FileCheck2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Examinations</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalExams}</p>
-                  <p className="text-[11px] text-slate-500">Under evaluation</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-slate-200/90 shadow-xs">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/60">
-                  <Send className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Ready to Publish</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalReadyToPublish}</p>
-                  <p className="text-[11px] text-emerald-600 font-medium">Grading fully completed</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-slate-200/90 shadow-xs">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200/60">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending Evaluation</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalPendingGrading}</p>
-                  <p className="text-[11px] text-slate-500">Awaiting teacher scoring</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-slate-200/90 shadow-xs">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200/60">
-                  <Award className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Published Results</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalPublishedResults}</p>
-                  <p className="text-[11px] text-slate-500">Visible to candidates</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
+          
           {/* Filter and Search Bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-white rounded-xl border border-slate-200/90 shadow-xs">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <Input
-                placeholder="Search examination or course..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 bg-slate-50 border-slate-200 text-xs h-9"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-              {[
-                { key: "ALL", label: "All Examinations" },
-                { key: "READY", label: `Ready for Release (${totalReadyToPublish})` },
-                { key: "PENDING", label: `Pending Marking (${totalPendingGrading})` },
-                { key: "PUBLISHED", label: "Released" },
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setFilterTab(tab.key as any)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
-                    filterTab === tab.key
-                      ? "bg-sky-600 text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          
 
           {/* Examinations Grading Table */}
           {loading ? (
@@ -267,6 +151,44 @@ export default function ExamOfficerGradingReviewPage() {
             </div>
           ) : filteredSummaries.length === 0 ? (
             <Card className="bg-white border-slate-200/90 shadow-xs">
+              <CardHeader className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold text-slate-900">
+                    <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-white rounded-xl border border-slate-200/90 shadow-xs">
+                      <div className="relative w-full sm:w-80">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                        <Input
+                          placeholder="Search examination or course..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          className="pl-9 bg-slate-50 border-slate-200 text-xs h-9"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+                        {[
+                          { key: "ALL", label: "All Examinations" },
+                          { key: "READY", label: `Ready for Release (${totalReadyToPublish})` },
+                          { key: "PENDING", label: `Pending Marking (${totalPendingGrading})` },
+                          { key: "PUBLISHED", label: "Released" },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            onClick={() => setFilterTab(tab.key as any)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
+                              filterTab === tab.key
+                                ? "bg-sky-600 text-white shadow-xs"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </CardTitle>
+                </div>
+              </CardHeader>
               <CardContent className="py-16 text-center">
                 <CheckCircle2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-base font-semibold text-slate-800">No Examinations Found</p>
@@ -282,11 +204,39 @@ export default function ExamOfficerGradingReviewPage() {
               <CardHeader className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-900">
-                    Examination Evaluation Roster ({filteredSummaries.length})
+                    <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-white rounded-xl border border-slate-200/90 shadow-xs">
+                      <div className="relative w-full sm:w-80">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                        <Input
+                          placeholder="Search examination or course..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          className="pl-9 bg-slate-50 border-slate-200 text-xs h-9"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+                        {[
+                          { key: "ALL", label: "All Examinations" },
+                          { key: "READY", label: `Ready for Release (${totalReadyToPublish})` },
+                          { key: "PENDING", label: `Pending Marking (${totalPendingGrading})` },
+                          { key: "PUBLISHED", label: "Released" },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            onClick={() => setFilterTab(tab.key as any)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
+                              filterTab === tab.key
+                                ? "bg-sky-600 text-white shadow-xs"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </CardTitle>
-                  <CardDescription className="text-xs text-slate-500">
-                    Review grading completeness, identify pending subjective answers, and proceed to publish results
-                  </CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="p-0">

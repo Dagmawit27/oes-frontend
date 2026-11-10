@@ -1,12 +1,21 @@
+import { isSchedulePassedOrClosed, ScheduleStatus } from "./schedule";
+
 export type ExamEventType =
   | "STARTED"
+  | "PASSCODE_VERIFIED"
+  | "PASSCODE_FAILED"
   | "ANSWER_SAVED"
   | "QUESTION_FLAGGED"
   | "TAB_BLUR"
   | "WINDOW_RESIZED"
   | "DISCONNECTED"
   | "RECONNECTED"
+  | "CONNECTION_PAUSED"
+  | "CONNECTION_RESUMED"
+  | "HEARTBEAT_TIMEOUT"
+  | "RATE_LIMIT_EXCEEDED"
   | "SUBMITTED"
+  | "AUTO_SUBMITTED"
   | "AUTO_SUBMITTED_EXPIRED";
 
 export interface CandidateMonitoring {
@@ -15,7 +24,16 @@ export interface CandidateMonitoring {
   studentName: string;
   registrationNumber: string;
   email?: string;
-  status: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "EXPIRED" | "ABANDONED";
+  status:
+    | "NOT_STARTED"
+    | "ACTIVE"
+    | "IN_PROGRESS"
+    | "CONNECTION_PAUSED"
+    | "RESUME_REQUIRED"
+    | "SUBMITTED"
+    | "AUTO_SUBMITTED"
+    | "EXPIRED"
+    | "ABANDONED";
   startedAt?: string | null;
   deadlineAt?: string | null;
   lastActivityAt?: string | null;
@@ -81,4 +99,53 @@ export interface MonitoringWebSocketMessage {
   candidate?: CandidateMonitoring;
   metrics?: Record<string, unknown>;
   timestamp: string;
+}
+
+export function isMonitoringSessionPassedOrClosed(
+  session: {
+    scheduleStatus: string;
+    scheduledCloseAt: string;
+  },
+  nowMs?: number | null
+): boolean {
+  return isSchedulePassedOrClosed(
+    {
+      status: session.scheduleStatus as ScheduleStatus,
+      scheduledCloseAt: session.scheduledCloseAt,
+    },
+    nowMs
+  );
+}
+
+export function isMonitoringSessionReadOnly(
+  session: {
+    scheduleStatus: string;
+    scheduledCloseAt: string;
+  },
+  nowMs?: number | null
+): boolean {
+  return (
+    session.scheduleStatus === "CANCELLED" ||
+    isMonitoringSessionPassedOrClosed(session, nowMs)
+  );
+}
+
+const ACTIVE_CANDIDATE_STATUSES = new Set([
+  "ACTIVE",
+  "IN_PROGRESS",
+  "CONNECTION_PAUSED",
+  "RESUME_REQUIRED",
+]);
+
+const SUBMITTED_CANDIDATE_STATUSES = new Set([
+  "SUBMITTED",
+  "AUTO_SUBMITTED",
+]);
+
+export function isCandidateActiveStatus(status?: string | null): boolean {
+  return Boolean(status && ACTIVE_CANDIDATE_STATUSES.has(status));
+}
+
+export function isCandidateSubmittedStatus(status?: string | null): boolean {
+  return Boolean(status && SUBMITTED_CANDIDATE_STATUSES.has(status));
 }

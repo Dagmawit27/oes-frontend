@@ -158,10 +158,6 @@ function ExamOfficerReviewContent() {
                 <h1 className="text-xl font-bold tracking-tight text-slate-900">{exam.title}</h1>
                 {getStatusBadge(exam.status)}
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Instructor: <strong>{exam.createdByName}</strong> ({exam.createdByEmail}) &bull;{" "}
-                {exam.courseCode} - {exam.courseName} (Sec {exam.section})
-              </p>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardShell } from "@/components/layout/DashboardShell";
@@ -8,7 +8,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { monitoringApi } from "@/lib/api/monitoring";
-import { ScheduleMonitoringSummary } from "@/types/monitoring";
+import {
+  ScheduleMonitoringSummary,
+  isMonitoringSessionPassedOrClosed,
+  isMonitoringSessionReadOnly,
+} from "@/types/monitoring";
 import { useNotifications } from "@/lib/context/NotificationContext";
 import {
   Clock,
@@ -20,18 +24,21 @@ import {
   RefreshCw,
   ArrowRight,
   ShieldAlert,
+  History,
 } from "lucide-react";
 
 export default function ExamMonitoringListPage() {
   const { connectionStatus } = useNotifications();
   const [schedules, setSchedules] = useState<ScheduleMonitoringSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   const fetchSchedules = async () => {
     setLoading(true);
     try {
       const res = await monitoringApi.getActiveSchedules();
       setSchedules(res.data);
+      setNowMs(Date.now());
     } catch (err) {
       console.error("Failed to load monitoring schedules:", err);
     } finally {
@@ -40,15 +47,54 @@ export default function ExamMonitoringListPage() {
   };
 
   useEffect(() => {
+    setNowMs(Date.now());
     fetchSchedules();
+    const timer = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(timer);
   }, []);
 
   const totalEligibleAll = schedules.reduce((acc, s) => acc + s.totalEligible, 0);
   const totalActiveAll = schedules.reduce((acc, s) => acc + s.activeAttempts, 0);
   const totalSubmittedAll = schedules.reduce((acc, s) => acc + s.submittedCount, 0);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  // Sort upcoming/early/live sittings first, and already passed/closed history afterwards
+  const sortedSchedules = useMemo(() => {
+    const getTier = (s: ScheduleMonitoringSummary) => {
+      if (isMonitoringSessionReadOnly(s, nowMs)) return 2;
+      const startMs = new Date(s.scheduledStartAt).getTime();
+      if (
+        s.scheduleStatus === "ONGOING" ||
+        (nowMs !== null && !Number.isNaN(startMs) && startMs <= nowMs)
+      ) {
+        return 0;
+      }
+      return 1;
+    };
+
+    return [...schedules].sort((a, b) => {
+      const tierA = getTier(a);
+      const tierB = getTier(b);
+      if (tierA !== tierB) return tierA - tierB;
+      const startA = new Date(a.scheduledStartAt).getTime();
+      const startB = new Date(b.scheduledStartAt).getTime();
+      if (Number.isNaN(startA)) return 1;
+      if (Number.isNaN(startB)) return -1;
+      // Live & upcoming ordered earliest-first; past history ordered most-recent-first
+      return tierA < 2 ? startA - startB : startB - startA;
+    });
+  }, [schedules, nowMs]);
+
+  const getStatusBadge = (s: ScheduleMonitoringSummary) => {
+    const passed = isMonitoringSessionPassedOrClosed(s, nowMs);
+    if (s.scheduleStatus !== "COMPLETED" && passed) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+          PASSED / CLOSED
+        </span>
+      );
+    }
+
+    switch (s.scheduleStatus) {
       case "ONGOING":
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -69,7 +115,7 @@ export default function ExamMonitoringListPage() {
           </span>
         );
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return <Badge variant="secondary">{s.scheduleStatus}</Badge>;
     }
   };
 
@@ -213,60 +259,88 @@ export default function ExamMonitoringListPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-medium uppercase tracking-wider">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider">
                     <tr>
-                      <th className="py-3 px-4">Examination</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4">Scheduled Window</th>
-                      <th className="py-3 px-4">Duration</th>
-                      <th className="py-3 px-4 text-center">Eligible</th>
-                      <th className="py-3 px-4 text-center">Active Now</th>
-                      <th className="py-3 px-4 text-center">Submitted</th>
-                      <th className="py-3 px-4 text-right">Invigilation</th>
+                      <th className="py-3 px-3">Examination</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3">Scheduled Window</th>
+                      <th className="py-3 px-3 text-center">Eligible</th>
+                      <th className="py-3 px-3 text-center">Active</th>
+                      <th className="py-3 px-3 text-center">Submitted</th>
+                      <th className="py-3 px-3 text-right">Invigilation</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {schedules.map((s) => (
-                      <tr key={s.scheduleId} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4">
-                          <p className="font-semibold text-slate-900">{s.examinationTitle}</p>
-                          <p className="text-xs text-blue-600 font-medium">
-                            {s.courseCode} — {s.courseName}
-                          </p>
-                        </td>
-                        <td className="py-3.5 px-4">{getStatusBadge(s.scheduleStatus)}</td>
-                        <td className="py-3.5 px-4 text-xs text-slate-600 whitespace-nowrap">
-                          {formatWindow(s.scheduledStartAt, s.scheduledCloseAt)}
-                        </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-600 font-medium">
-                          {s.durationMinutes} mins
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-semibold text-slate-700">
-                          {s.totalEligible}
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-bold text-emerald-600">
-                          {s.activeAttempts > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              {s.activeAttempts}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">0</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-semibold text-purple-600">
-                          {s.submittedCount}
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <Link href={`/exam-officer/monitoring/${s.scheduleId}`}>
-                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs">
-                              Live Room
-                              <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                            </Button>
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
+                    {sortedSchedules.map((s) => {
+                      const readOnly = isMonitoringSessionReadOnly(s, nowMs);
+
+                      return (
+                        <tr key={s.scheduleId} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 max-w-[260px]">
+                            <p className="font-semibold text-slate-900 line-clamp-1">
+                              {s.examinationTitle}
+                            </p>
+                            <p className="text-xs text-blue-600 font-medium line-clamp-1">
+                              {s.courseCode} — {s.courseName}
+                            </p>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">{getStatusBadge(s)}</td>
+                          <td className="py-3 px-3 text-xs text-slate-600">
+                            <p className="font-medium text-slate-700">
+                              {formatWindow(s.scheduledStartAt, s.scheduledCloseAt)}
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {s.durationMinutes} mins duration
+                            </p>
+                          </td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700 whitespace-nowrap">
+                            {s.totalEligible}
+                          </td>
+                          <td className="py-3 px-3 text-center font-bold text-emerald-600 whitespace-nowrap">
+                            {s.activeAttempts > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold">
+                                {!readOnly && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                )}
+                                {s.activeAttempts}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">0</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            {s.submittedCount > 0 ? (
+                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold">
+                                {s.submittedCount}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-medium">0</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            {readOnly ? (
+                              <Link href={`/exam-officer/monitoring/${s.scheduleId}`}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-slate-300 text-slate-700 hover:bg-slate-100 font-medium text-xs"
+                                >
+                                  <History className="w-3.5 h-3.5 mr-1" />
+                                  See History
+                                </Button>
+                              </Link>
+                            ) : (
+                              <Link href={`/exam-officer/monitoring/${s.scheduleId}`}>
+                                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs">
+                                  Live Room
+                                  <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                                </Button>
+                              </Link>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
